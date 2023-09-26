@@ -17,6 +17,8 @@
 #include <thingset/sdk.h>
 #include <thingset/storage.h>
 
+#include "packetizer.c"
+
 LOG_MODULE_REGISTER(thingset_can, CONFIG_THINGSET_SDK_LOG_LEVEL);
 
 extern uint8_t eui64[8];
@@ -127,15 +129,41 @@ static void thingset_can_report_tx_handler(struct k_work *work)
     struct can_frame frame = {
         .flags = CAN_FRAME_IDE,
     };
+    struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
+    int err;
 
     struct thingset_data_object *obj = NULL;
     while ((obj = thingset_iterate_subsets(&ts, TS_SUBSET_LIVE, obj)) != NULL) {
-        data_len = thingset_export_item(&ts, frame.data, sizeof(frame.data), obj,
+        data_len = thingset_export_item(&ts, sbuf->data, sbuf->size, obj,
                                         THINGSET_BIN_VALUES_ONLY);
-        if (data_len > 0) {
+        if (data_len > 8) {
+            frame.id = THINGSET_CAN_TYPE_PACKETIZED_REPORT | THINGSET_CAN_PRIO_REPORT_LOW
+                    | THINGSET_CAN_DATA_ID_SET(obj->id)
+                    | THINGSET_CAN_SOURCE_SET(ts_can->node_addr);
+            int pos_buf = 0;
+            int chunk_len;
+
+            
+            uint8_t seq = 0;
+            uint8_t *body = frame.data + 1;
+            while ((chunk_len = packetize(sbuf->data, data_len, body, 7, &pos_buf)) != 0) {
+                frame.data[0] = seq++;
+                frame.dlc = chunk_len + 1;
+                int retry = 0;
+                do
+                {
+                    err = can_send(ts_can->dev, &frame, K_MSEC(10), thingset_can_report_tx_cb, NULL);
+                } while (++retry < 3 && err == -EAGAIN);
+                if (err == -EAGAIN) {
+                    LOG_DBG("Error sending CAN frame with ID %x", frame.id);
+                    break;
+                }
+            }
+        } else if (data_len > 0) {
+            memcpy(frame.data, sbuf->data, data_len);
             frame.id = THINGSET_CAN_TYPE_REPORT | THINGSET_CAN_PRIO_REPORT_LOW
-                       | THINGSET_CAN_DATA_ID_SET(obj->id)
-                       | THINGSET_CAN_SOURCE_SET(ts_can->node_addr);
+                    | THINGSET_CAN_DATA_ID_SET(obj->id)
+                    | THINGSET_CAN_SOURCE_SET(ts_can->node_addr);
             frame.dlc = data_len;
             if (can_send(ts_can->dev, &frame, K_MSEC(10), thingset_can_report_tx_cb, NULL) != 0) {
                 LOG_DBG("Error sending CAN frame with ID %x", frame.id);
