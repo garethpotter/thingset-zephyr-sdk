@@ -52,29 +52,27 @@ static const struct isotp_fc_opts fc_opts = {
 struct can_rx_buffer
 {
     uint8_t buffer[CONFIG_THINGSET_CAN_RX_BUF_PER_SENDER_SIZE];
-    size_t pos;
+    int pos;
     uint8_t src_addr;
-}
+    bool escape;
+};
 
 static struct can_rx_buffer rx_bufs[CONFIG_THINGSET_CAN_NUM_BUFFERS];
 
-static bool thingset_can_get_rx_buf(uint8_t src_addr, uint8_t *buffer, size_t *pos, bool *escape)
+static struct can_rx_buffer* thingset_can_get_rx_buf(uint8_t src_addr)
 {
-    for (int i = 0; i < CONFIG_THINGSET_CAN_NUM_BUFFERS; i++)
+    struct can_rx_buffer *buffer = NULL;
+    for (buffer = rx_bufs; buffer < rx_bufs + CONFIG_THINGSET_CAN_NUM_BUFFERS; buffer++)
     {
-        struct can_rx_buffer rx_buf = rx_bufs[i];
-        if (rx_buf.src_addr == 0x00) {
-            rx_buf.src_addr = src_addr;
+        if (buffer->src_addr == 0x00) {
+            buffer->src_addr = src_addr;
         }
-        if (rx_buf.src_addr == src_addr) {
-            buffer = rx_buf.buffer;
-            pos = &rx_buf.pos;
-            escape = &rx_buf.escape;
-            return true;
+        if (buffer->src_addr == src_addr) {
+            return buffer;
         }
     }
 
-    return false;
+    return NULL;
 }
 
 static void thingset_can_addr_claim_tx_cb(const struct device *dev, int error, void *user_data)
@@ -145,16 +143,15 @@ static void thingset_can_report_rx_cb(const struct device *dev, struct can_frame
     uint16_t data_id = THINGSET_CAN_DATA_ID_GET(frame->id);
     uint8_t source_addr = THINGSET_CAN_SOURCE_GET(frame->id);
     if (THINGSET_CAN_PACKETIZED_REPORT(frame->id)) {
-        uint8_t *rx_buf;
-        size_t *dst_pos;
-        bool *escape;
-        if (thingset_can_get_rx_buf(source_addr, rx_buf, dst_pos, escape)) {
-            if (reassemble(frame->data, can_dlc_to_bytes(frame->dlc), rx_buf,
-                           CONFIG_THINGSET_CAN_RX_BUF_PER_SENDER_SIZE, dst_pos,
-                           escape))
+        struct can_rx_buffer *buffer = NULL;
+        if ((buffer = thingset_can_get_rx_buf(source_addr)) != NULL) {
+            if (reassemble(frame->data + 1, can_dlc_to_bytes(frame->dlc) - 1, buffer->buffer,
+                           CONFIG_THINGSET_CAN_RX_BUF_PER_SENDER_SIZE, &(buffer->pos),
+                           &(buffer->escape)))
             {
                 /* full message received */
-                ts_can->report_rx_cb(data_id, rx_buf, &dst_pos, source_addr);   
+                ts_can->report_rx_cb(data_id, buffer->buffer, buffer->pos, source_addr);
+                buffer->pos = 0;
             }
         }
     } else {

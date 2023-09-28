@@ -17,6 +17,20 @@ config THINGSET_CAN_RX_BUF_SIZE
     help
       Default value large enough to receive a 512 byte flash page for DFU.
 
+config THINGSET_CAN_RX_BUF_PER_SENDER_SIZE
+    int "ThingSet CAN per-sender RX buffer size"
+    range 32 512
+    default 64
+    help
+      Default value enough to receive at least a 10-element array via broadcast.
+
+config THINGSET_CAN_NUM_BUFFERS
+    int "ThingSet CAN number of per-sender RX buffers"
+    range 1 64
+    default 8
+    help
+      Number of unique senders anticipated on the CAN bus.
+
 config THINGSET_CAN_MULTIPLE_INSTANCES
     bool "Support for multiple ThingSet CAN instances"
     help
