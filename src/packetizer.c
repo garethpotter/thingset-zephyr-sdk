@@ -49,3 +49,47 @@ int packetize(const uint8_t *src, size_t src_len, uint8_t *dst, size_t dst_len, 
     (*src_pos) = pos_buf;
     return pos_chunk;
 }
+
+bool reassemble(const uint8_t *src, size_t src_len, uint8_t *dst, size_t dst_len, int *dst_pos, bool *escape)
+{
+    bool finished = true;
+    for (int i = 0; i < src_len; i++) {
+        uint8_t c = *(src + i);
+        if (*escape) {
+            if (c == MSG_ESC_END) {
+                c = MSG_END;
+            }
+            else if (c == MSG_ESC_ESC) {
+                c = MSG_ESC;
+            }
+            else if (c == MSG_ESC_SKIP) {
+                c = MSG_SKIP;
+            }
+            /* else: protocol violation, pass character as is */
+            (*escape) = false;
+        }
+        else if (c == MSG_ESC) {
+            (*escape) = true;
+            continue;
+        }
+        else if (c == MSG_SKIP) {
+            continue;
+        }
+        else if (c == MSG_END) {
+            if (finished) {
+                /* previous run finished and MSG_END was used as new start byte */
+                continue;
+            }
+            else {
+                finished = true;
+                return finished;
+            }
+        }
+        else {
+            finished = false;
+        }
+        dst[(*dst_pos)++] = c;
+    }
+
+    return finished;
+}

@@ -114,56 +114,23 @@ static ssize_t thingset_ble_rx(struct bt_conn *conn, const struct bt_gatt_attr *
     /* store across multiple packages whether we had an escape char */
     static bool escape = false;
 
-    bool finished = true;
     if (k_sem_take(&rx_buf_lock, K_NO_WAIT) == 0) {
-        for (int i = 0; i < len; i++) {
-            uint8_t c = *((uint8_t *)buf + i);
-            if (escape) {
-                if (c == MSG_ESC_END) {
-                    c = MSG_END;
-                }
-                else if (c == MSG_ESC_ESC) {
-                    c = MSG_ESC;
-                }
-                else if (c == MSG_ESC_SKIP) {
-                    c = MSG_SKIP;
-                }
-                /* else: protocol violation, pass character as is */
-                escape = false;
-            }
-            else if (c == MSG_ESC) {
-                escape = true;
-                continue;
-            }
-            else if (c == MSG_SKIP) {
-                continue;
-            }
-            else if (c == MSG_END) {
-                if (finished) {
-                    /* previous run finished and MSG_END was used as new start byte */
-                    continue;
-                }
-                else {
-                    finished = true;
-                    if (discard_buffer) {
-                        rx_buf_pos = 0;
-                        discard_buffer = false;
-                        k_sem_give(&rx_buf_lock);
-                        return len;
-                    }
-                    else {
-                        rx_buf[rx_buf_pos] = '\0';
-                        /* start processing the request and keep the rx_buf_lock */
-                        thingset_sdk_reschedule_work(&processing_work, K_NO_WAIT);
-                        return len;
-                    }
-                }
+        bool finished = reassemble((uint8_t *)buf, len, rx_buf, CONFIG_THINGSET_BLE_RX_BUF_SIZE,
+                             &rx_buf_pos, &escape);
+        if (finished) {
+            if (discard_buffer) {
+                rx_buf_pos = 0;
+                discard_buffer = false;
+                k_sem_give(&rx_buf_lock);
+                return len;
             }
             else {
-                finished = false;
+                rx_buf[rx_buf_pos] = '\0';
+                /* start processing the request and keep the rx_buf_lock */
+                thingset_sdk_reschedule_work(&processing_work, K_NO_WAIT);
+                return len;
             }
-            rx_buf[rx_buf_pos++] = c;
-        }
+        }        
         k_sem_give(&rx_buf_lock);
     }
     else {
