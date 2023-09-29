@@ -29,7 +29,15 @@ config THINGSET_CAN_NUM_BUFFERS
     range 1 64
     default 8
     help
-      Number of unique senders anticipated on the CAN bus.
+      Maximum number of unique senders anticipated on the CAN bus.
+
+config THINGSET_CAN_NUM_BUCKETS
+    int "ThingSet CAN number of buckets into which RX buffers are divided"
+    range 1 16
+    default 8
+    help
+      It may be useful to modify this value to improve the efficiency
+      of RX buffer lookup.
 
 config THINGSET_CAN_MULTIPLE_INSTANCES
     bool "Support for multiple ThingSet CAN instances"

@@ -55,19 +55,34 @@ struct can_rx_buffer
     int pos;
     uint8_t src_addr;
     bool escape;
+    struct can_rx_buffer *next;
 };
 
 static struct can_rx_buffer rx_bufs[CONFIG_THINGSET_CAN_NUM_BUFFERS];
 
+static struct can_rx_buffer* rx_buf_lookup[CONFIG_THINGSET_CAN_NUM_BUCKETS];
+
 static struct can_rx_buffer* thingset_can_get_rx_buf(uint8_t src_addr)
 {
-    struct can_rx_buffer *buffer = NULL;
+    struct can_rx_buffer *prev = NULL;
+    struct can_rx_buffer *buffer = rx_buf_lookup[src_addr % CONFIG_THINGSET_CAN_NUM_BUCKETS];
+    while (buffer != NULL) {
+        if (buffer->src_addr == src_addr) {
+            return buffer;
+        }
+        prev = buffer;
+        buffer = buffer->next;
+    }
     for (buffer = rx_bufs; buffer < rx_bufs + CONFIG_THINGSET_CAN_NUM_BUFFERS; buffer++)
     {
         if (buffer->src_addr == 0x00) {
             buffer->src_addr = src_addr;
-        }
-        if (buffer->src_addr == src_addr) {
+            buffer->next = NULL;
+            if (prev != NULL) {
+                prev->next = buffer;
+            } else {
+                rx_buf_lookup[src_addr % CONFIG_THINGSET_CAN_NUM_BUCKETS] = buffer;
+            }
             return buffer;
         }
     }
