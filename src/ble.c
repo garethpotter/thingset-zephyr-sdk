@@ -130,7 +130,7 @@ static ssize_t thingset_ble_rx(struct bt_conn *conn, const struct bt_gatt_attr *
                 thingset_sdk_reschedule_work(&processing_work, K_NO_WAIT);
                 return len;
             }
-        }        
+        }
         k_sem_give(&rx_buf_lock);
     }
     else {

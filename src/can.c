@@ -203,7 +203,7 @@ static void thingset_can_report_tx_handler(struct k_work *work)
         .flags = CAN_FRAME_IDE,
     };
     struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
-    
+
     struct thingset_data_object *obj = NULL;
     while ((obj = thingset_iterate_subsets(&ts, TS_SUBSET_LIVE, obj)) != NULL) {
         k_sem_take(&sbuf->lock, K_FOREVER);
@@ -417,7 +417,7 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
     if (ts_can->node_addr < 1 || ts_can->node_addr > THINGSET_CAN_ADDR_MAX) {
         ts_can->node_addr = 1;
     }
-    
+
     k_event_init(&ts_can->events);
 
     can_start(ts_can->dev);
