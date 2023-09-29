@@ -17,22 +17,37 @@ config THINGSET_CAN_RX_BUF_SIZE
     help
       Default value large enough to receive a 512 byte flash page for DFU.
 
+config THINGSET_CAN_PACKETIZED_REPORTS_TX
+  bool "Support for transmission of packetized reports over classical CAN"
+  help
+    If enabled, values greater than 8 bytes in size can be transmitted
+    via CAN reports.
+
+config THINGSET_CAN_PACKETIZED_REPORTS_RX
+  bool "Support for reception of packetized reports over classical CAN"
+  help
+    If enabled, values greater than 8 bytes in size can be received
+    via CAN reports.
+
 config THINGSET_CAN_RX_BUF_PER_SENDER_SIZE
-    int "ThingSet CAN per-sender RX buffer size"
+    int "ThingSet CAN per-sender RX buffer size for reassembly of packetized reports"
+    depends on THINGSET_CAN_PACKETIZED_REPORTS_RX
     range 32 512
     default 64
     help
       Default value enough to receive at least a 10-element array via broadcast.
 
-config THINGSET_CAN_NUM_BUFFERS
+config THINGSET_CAN_NUM_RX_BUFFERS
     int "ThingSet CAN number of per-sender RX buffers"
+    depends on THINGSET_CAN_PACKETIZED_REPORTS_RX
     range 1 64
     default 8
     help
       Maximum number of unique senders anticipated on the CAN bus.
 
-config THINGSET_CAN_NUM_BUCKETS
+config THINGSET_CAN_NUM_RX_BUFFER_BUCKETS
     int "ThingSet CAN number of buckets into which RX buffers are divided"
+    depends on THINGSET_CAN_PACKETIZED_REPORTS_RX
     range 1 16
     default 8
     help

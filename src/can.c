@@ -32,11 +32,14 @@ static const struct can_filter report_filter = {
     .mask = THINGSET_CAN_TYPE_MASK,
     .flags = CAN_FILTER_DATA | CAN_FILTER_IDE,
 };
+
+#ifdef CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_RX
 static const struct can_filter packetized_report_filter = {
     .id = THINGSET_CAN_TYPE_PACKETIZED_REPORT,
     .mask = THINGSET_CAN_TYPE_MASK,
     .flags = CAN_FILTER_DATA | CAN_FILTER_IDE,
 };
+#endif /* CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_RX */
 
 static const struct can_filter addr_claim_filter = {
     .id = THINGSET_CAN_TYPE_NETWORK | THINGSET_CAN_TARGET_SET(THINGSET_CAN_ADDR_BROADCAST),
@@ -49,6 +52,7 @@ static const struct isotp_fc_opts fc_opts = {
     .stmin = 1, /* minimum separation time = 100 ms */
 };
 
+#ifdef CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_RX
 struct can_rx_buffer
 {
     uint8_t buffer[CONFIG_THINGSET_CAN_RX_BUF_PER_SENDER_SIZE];
@@ -58,14 +62,14 @@ struct can_rx_buffer
     struct can_rx_buffer *next;
 };
 
-static struct can_rx_buffer rx_bufs[CONFIG_THINGSET_CAN_NUM_BUFFERS];
+static struct can_rx_buffer rx_bufs[CONFIG_THINGSET_CAN_NUM_RX_BUFFERS];
 
-static struct can_rx_buffer* rx_buf_lookup[CONFIG_THINGSET_CAN_NUM_BUCKETS];
+static struct can_rx_buffer* rx_buf_lookup[CONFIG_THINGSET_CAN_NUM_RX_BUFFER_BUCKETS];
 
 static struct can_rx_buffer* thingset_can_get_rx_buf(uint8_t src_addr)
 {
     struct can_rx_buffer *prev = NULL;
-    struct can_rx_buffer *buffer = rx_buf_lookup[src_addr % CONFIG_THINGSET_CAN_NUM_BUCKETS];
+    struct can_rx_buffer *buffer = rx_buf_lookup[src_addr % CONFIG_THINGSET_CAN_NUM_RX_BUFFER_BUCKETS];
     while (buffer != NULL) {
         if (buffer->src_addr == src_addr) {
             return buffer;
@@ -73,7 +77,7 @@ static struct can_rx_buffer* thingset_can_get_rx_buf(uint8_t src_addr)
         prev = buffer;
         buffer = buffer->next;
     }
-    for (buffer = rx_bufs; buffer < rx_bufs + CONFIG_THINGSET_CAN_NUM_BUFFERS; buffer++)
+    for (buffer = rx_bufs; buffer < rx_bufs + CONFIG_THINGSET_CAN_NUM_RX_BUFFERS; buffer++)
     {
         if (buffer->src_addr == 0x00) {
             buffer->src_addr = src_addr;
@@ -81,7 +85,7 @@ static struct can_rx_buffer* thingset_can_get_rx_buf(uint8_t src_addr)
             if (prev != NULL) {
                 prev->next = buffer;
             } else {
-                rx_buf_lookup[src_addr % CONFIG_THINGSET_CAN_NUM_BUCKETS] = buffer;
+                rx_buf_lookup[src_addr % CONFIG_THINGSET_CAN_NUM_RX_BUFFER_BUCKETS] = buffer;
             }
             return buffer;
         }
@@ -89,6 +93,7 @@ static struct can_rx_buffer* thingset_can_get_rx_buf(uint8_t src_addr)
 
     return NULL;
 }
+#endif /* CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_RX */
 
 static void thingset_can_addr_claim_tx_cb(const struct device *dev, int error, void *user_data)
 {
@@ -157,6 +162,7 @@ static void thingset_can_report_rx_cb(const struct device *dev, struct can_frame
     const struct thingset_can *ts_can = user_data;
     uint16_t data_id = THINGSET_CAN_DATA_ID_GET(frame->id);
     uint8_t source_addr = THINGSET_CAN_SOURCE_GET(frame->id);
+#ifdef CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_RX
     if (THINGSET_CAN_PACKETIZED_REPORT(frame->id)) {
         struct can_rx_buffer *buffer = NULL;
         if ((buffer = thingset_can_get_rx_buf(source_addr)) != NULL) {
@@ -169,9 +175,9 @@ static void thingset_can_report_rx_cb(const struct device *dev, struct can_frame
                 buffer->pos = 0;
             }
         }
-    } else {
+    } else
+#endif /* CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_RX */
         ts_can->report_rx_cb(data_id, frame->data, can_dlc_to_bytes(frame->dlc), source_addr);
-    }
 }
 
 static void thingset_can_report_tx_cb(const struct device *dev, int error, void *user_data)
@@ -189,14 +195,15 @@ static void thingset_can_report_tx_handler(struct k_work *work)
         .flags = CAN_FRAME_IDE,
     };
     struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
-    int err;
-
+    
     struct thingset_data_object *obj = NULL;
     while ((obj = thingset_iterate_subsets(&ts, TS_SUBSET_LIVE, obj)) != NULL) {
         k_sem_take(&sbuf->lock, K_FOREVER);
         data_len = thingset_export_item(&ts, sbuf->data, sbuf->size, obj,
                                         THINGSET_BIN_VALUES_ONLY);
         if (data_len > 8) {
+#ifdef CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_TX
+            int err;
             frame.id = THINGSET_CAN_TYPE_PACKETIZED_REPORT | THINGSET_CAN_PRIO_REPORT_LOW
                        | THINGSET_CAN_DATA_ID_SET(obj->id)
                        | THINGSET_CAN_SOURCE_SET(ts_can->node_addr);
@@ -218,6 +225,9 @@ static void thingset_can_report_tx_handler(struct k_work *work)
                 }
             }
             k_sem_give(&sbuf->lock);
+#else
+            LOG_WRN("Unable to send CAN frame with ID %x as it is too large (%d)", frame.id, data_len);
+#endif /* CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_TX */
         }
         else if (data_len > 0) {
             memcpy(frame.data, sbuf->data, data_len);
@@ -513,12 +523,14 @@ int thingset_can_set_report_rx_callback_inst(struct thingset_can *ts_can,
         return filter_id;
     }
 
+#ifdef CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_RX
     filter_id =
         can_add_rx_filter(ts_can->dev, thingset_can_report_rx_cb, ts_can, &packetized_report_filter);
     if (filter_id < 0) {
         LOG_ERR("Unable to add packetized report filter: %d", filter_id);
         return filter_id;
     }
+#endif /* CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_RX */
 
     return 0;
 }
