@@ -167,13 +167,18 @@ static void thingset_can_report_rx_cb(const struct device *dev, struct can_frame
     if (THINGSET_CAN_PACKETIZED_REPORT(frame->id)) {
         struct can_rx_buffer *buffer = NULL;
         if ((buffer = thingset_can_get_rx_buf(source_addr)) != NULL) {
-            if (buffer->seq++ == frame->data[0] &&
-                reassemble(frame->data + 1, can_dlc_to_bytes(frame->dlc) - 1, buffer->buffer,
-                           CONFIG_THINGSET_CAN_RX_BUF_PER_SENDER_SIZE, &(buffer->pos),
-                           &(buffer->escape)))
-            {
-                /* full message received */
-                ts_can->report_rx_cb(data_id, buffer->buffer, buffer->pos, source_addr);
+            if (buffer->seq++ == frame->data[0]) {
+                if (reassemble(frame->data + 1, can_dlc_to_bytes(frame->dlc) - 1, buffer->buffer,
+                               CONFIG_THINGSET_CAN_RX_BUF_PER_SENDER_SIZE, &(buffer->pos),
+                               &(buffer->escape)))
+                {
+                    /* full message received */
+                    ts_can->report_rx_cb(data_id, buffer->buffer, buffer->pos, source_addr);
+                    buffer->pos = 0;
+                    buffer->seq = 0;
+                }
+            } else {
+                /* out-of-sequence message received, so reset buffer */
                 buffer->pos = 0;
                 buffer->seq = 0;
             }
