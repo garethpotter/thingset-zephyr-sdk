@@ -23,6 +23,12 @@ LOG_MODULE_REGISTER(thingset_can, CONFIG_THINGSET_SDK_LOG_LEVEL);
 
 extern uint8_t eui64[8];
 
+#ifdef CONFIG_CAN_FD_MODE
+static const int CAN_FRAME_LEN = 64;
+#else
+static const int CAN_FRAME_LEN = 8;
+#endif
+
 #define EVENT_ADDRESS_CLAIM_MSG_SENT    0x01
 #define EVENT_ADDRESS_CLAIMING_FINISHED 0x02
 #define EVENT_ADDRESS_ALREADY_USED      0x03
@@ -193,6 +199,20 @@ static void thingset_can_report_tx_cb(const struct device *dev, int error, void 
     /* Do nothing: Reports are fire and forget. */
 }
 
+static int can_send_with_retry(const struct device *dev, struct can_frame *frame, int retry_count)
+{
+    int err;
+    int retry = 0;
+    do
+    {
+        err = can_send(dev, frame, K_MSEC(10), thingset_can_report_tx_cb, NULL);
+    } while (retry++ < retry_count && err == -EAGAIN);
+    if (err == -EAGAIN) {
+        LOG_WRN("Error: retry count %d exceeded sending CAN frame with ID %x", retry_count, frame->id);
+    }
+    return err;
+}
+
 static void thingset_can_report_tx_handler(struct k_work *work)
 {
     struct k_work_delayable *dwork = k_work_delayable_from_work(work);
@@ -202,6 +222,9 @@ static void thingset_can_report_tx_handler(struct k_work *work)
     struct can_frame frame = {
         .flags = CAN_FRAME_IDE,
     };
+#ifdef CONFIG_CAN_FD_MODE
+    frame.flags |= CAN_FRAME_FDF;
+#endif
     struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
 
     struct thingset_data_object *obj = NULL;
@@ -209,9 +232,9 @@ static void thingset_can_report_tx_handler(struct k_work *work)
         k_sem_take(&sbuf->lock, K_FOREVER);
         data_len = thingset_export_item(&ts, sbuf->data, sbuf->size, obj,
                                         THINGSET_BIN_VALUES_ONLY);
-        if (data_len > 8) {
+        int err;
+        if (data_len > CAN_FRAME_LEN) {
 #ifdef CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_TX
-            int err;
             frame.id = THINGSET_CAN_TYPE_PACKETIZED_REPORT | THINGSET_CAN_PRIO_REPORT_LOW
                        | THINGSET_CAN_DATA_ID_SET(obj->id)
                        | THINGSET_CAN_SOURCE_SET(ts_can->node_addr);
@@ -219,16 +242,12 @@ static void thingset_can_report_tx_handler(struct k_work *work)
             int chunk_len;
             uint8_t seq = 0;
             uint8_t *body = frame.data + 1;
-            while ((chunk_len = packetize(sbuf->data, data_len, body, 7, &pos_buf)) != 0) {
+            while ((chunk_len = packetize(sbuf->data, data_len, body, CAN_FRAME_LEN - 1, &pos_buf)) != 0) {
                 frame.data[0] = seq++;
                 frame.dlc = chunk_len + 1;
-                int retry = 0;
-                do
+                err = can_send_with_retry(ts_can->dev, &frame, 3);
+                if (err != 0)
                 {
-                    err = can_send(ts_can->dev, &frame, K_MSEC(10), thingset_can_report_tx_cb, NULL);
-                } while (retry++ < 3 && err == -EAGAIN);
-                if (err == -EAGAIN) {
-                    LOG_DBG("Error sending CAN frame with ID %x", frame.id);
                     break;
                 }
             }
@@ -243,10 +262,8 @@ static void thingset_can_report_tx_handler(struct k_work *work)
             frame.id = THINGSET_CAN_TYPE_REPORT | THINGSET_CAN_PRIO_REPORT_LOW
                        | THINGSET_CAN_DATA_ID_SET(obj->id)
                        | THINGSET_CAN_SOURCE_SET(ts_can->node_addr);
-            frame.dlc = data_len;
-            if (can_send(ts_can->dev, &frame, K_MSEC(10), thingset_can_report_tx_cb, NULL) != 0) {
-                LOG_DBG("Error sending CAN frame with ID %x", frame.id);
-            }
+            frame.dlc = can_bytes_to_dlc(data_len);
+            err = can_send_with_retry(ts_can->dev, &frame, 3);
         }
         else {
             k_sem_give(&sbuf->lock);
@@ -281,7 +298,7 @@ int thingset_can_receive_inst(struct thingset_can *ts_can, uint8_t *rx_buffer, s
     ret = isotp_bind(&ts_can->recv_ctx, ts_can->dev, &ts_can->rx_addr, &ts_can->tx_addr, &fc_opts,
                      timeout);
     if (ret != ISOTP_N_OK) {
-        LOG_DBG("Failed to bind to rx ID %d [%d]", ts_can->rx_addr.ext_id, ret);
+        LOG_WRN("Failed to bind to rx ID %d [%d]", ts_can->rx_addr.ext_id, ret);
         return -EIO;
     }
 
@@ -408,6 +425,10 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
         return -ENODEV;
     }
 
+#ifdef CONFIG_CAN_FD_MODE
+    can_set_mode(ts_can->dev, CAN_MODE_FD);
+#endif
+
     k_work_init_delayable(&ts_can->reporting_work, thingset_can_report_tx_handler);
     k_work_init_delayable(&ts_can->addr_claim_work, thingset_can_addr_claim_tx_handler);
 
@@ -487,8 +508,12 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
 
     /* Normal ISO-TP addressing (using only CAN ID) */
     /* enable SAE J1939 compatible addressing */
-    ts_can->rx_addr.flags = ISOTP_MSG_IDE | ISOTP_MSG_FIXED_ADDR | ISOTP_MSG_FDF;
-    ts_can->tx_addr.flags = ISOTP_MSG_IDE | ISOTP_MSG_FIXED_ADDR | ISOTP_MSG_FDF;
+    ts_can->rx_addr.flags = ISOTP_MSG_IDE | ISOTP_MSG_FIXED_ADDR;
+    ts_can->tx_addr.flags = ISOTP_MSG_IDE | ISOTP_MSG_FIXED_ADDR;
+#ifdef CONFIG_CAN_FD_MODE
+    ts_can->rx_addr.flags |= ISOTP_MSG_FDF;
+    ts_can->tx_addr.flags |= ISOTP_MSG_FDF;
+#endif
 
     struct can_filter addr_discovery_filter = {
         .id = THINGSET_CAN_TYPE_NETWORK | THINGSET_CAN_SOURCE_SET(THINGSET_CAN_ADDR_ANONYMOUS)
