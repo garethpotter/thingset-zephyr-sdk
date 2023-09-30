@@ -485,13 +485,10 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
     thingset_storage_save_queued();
 #endif
 
-    ts_can->rx_addr.ide = 1;
-    ts_can->rx_addr.use_ext_addr = 0;   /* Normal ISO-TP addressing (using only CAN ID) */
-    ts_can->rx_addr.use_fixed_addr = 1; /* enable SAE J1939 compatible addressing */
-
-    ts_can->tx_addr.ide = 1;
-    ts_can->tx_addr.use_ext_addr = 0;
-    ts_can->tx_addr.use_fixed_addr = 1;
+    /* Normal ISO-TP addressing (using only CAN ID) */
+    /* enable SAE J1939 compatible addressing */
+    ts_can->rx_addr.flags = ISOTP_MSG_IDE | ISOTP_MSG_FIXED_ADDR | ISOTP_MSG_FDF;
+    ts_can->tx_addr.flags = ISOTP_MSG_IDE | ISOTP_MSG_FIXED_ADDR | ISOTP_MSG_FDF;
 
     struct can_filter addr_discovery_filter = {
         .id = THINGSET_CAN_TYPE_NETWORK | THINGSET_CAN_SOURCE_SET(THINGSET_CAN_ADDR_ANONYMOUS)
