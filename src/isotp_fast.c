@@ -209,9 +209,7 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *ctx)
         case ISOTP_RX_STATE_PROCESS_SF:
             LOG_DBG("SM process SF of length %d", ctx->rem_len);
             ctx->rem_len = 0;
-            ctx->ctx->recv_callback(ctx->buffer, ctx->rem_len, ctx->sender_addr, ctx->ctx->recv_cb_arg);
             ctx->state = ISOTP_RX_STATE_RECYCLE;
-            free_recv_ctx(&ctx);
             receive_state_machine(ctx);
             break;
 
@@ -283,6 +281,11 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *ctx)
             // ctx->state = ISOTP_RX_STATE_RECYCLE;
             free_recv_ctx(&ctx);
             __fallthrough;
+        case ISOTP_RX_STATE_RECYCLE:
+            LOG_DBG("Message complete; dispatching");
+            ctx->ctx->recv_callback(ctx->buffer, 0, ctx->sender_addr, ctx->ctx->recv_cb_arg);
+            free_recv_ctx(&ctx);
+            break;
         case ISOTP_RX_STATE_UNBOUND:
             break;
 
@@ -366,9 +369,7 @@ static void process_cf(struct isotp_fast_recv_ctx *rctx, struct can_frame *frame
 
     if (rctx->rem_len == 0) {
         rctx->state = ISOTP_RX_STATE_RECYCLE;
-        LOG_DBG("Message complete; dispatching");
-        rctx->ctx->recv_callback(rctx->buffer, 0, rctx->sender_addr, rctx->ctx->recv_cb_arg);
-        free_recv_ctx(&rctx);
+        k_work_submit(&rctx->work); // to dispatch complete message
         return;
     }
 

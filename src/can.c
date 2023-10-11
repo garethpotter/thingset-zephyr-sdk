@@ -336,7 +336,6 @@ void isotp_fast_recv_callback(struct net_buf *buffer, int rem_len, isotp_fast_ms
         net_buf_linearize(temp, sizeof(temp), buffer, 0, len);
         struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
         int tx_len = thingset_process_message(&ts, temp, len, sbuf->data, sbuf->size);
-        LOG_DBG("Got response of length %d", tx_len);
         if (tx_len > 0) {
             isotp_fast_node_id target_id = (uint8_t)(sender_addr & 0xFF);
             thingset_can_send_inst(ts_can, sbuf->data, tx_len, target_id);
