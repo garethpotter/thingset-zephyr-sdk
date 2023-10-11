@@ -401,6 +401,9 @@ static void receive_timeout_handler(struct k_timer *timer)
         case ISOTP_RX_STATE_TRY_ALLOC:
             rctx->state = ISOTP_RX_STATE_SEND_WAIT;
             break;
+
+        default:
+            break;
     }
 
     k_work_submit(&rctx->work);
