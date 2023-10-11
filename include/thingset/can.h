@@ -278,6 +278,13 @@ int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint8_t target_addr,
  */
 int thingset_can_set_report_rx_callback(thingset_can_report_rx_callback_t rx_cb);
 
+/**
+ * Get ThingSet CAN instance
+ *
+ * @returns Pointer to internal ThingSet CAN instance
+ */
+struct thingset_can *thingset_can_get_inst();
+
 #endif /* CONFIG_THINGSET_CAN_MULTIPLE_INSTANCES */
 
 #ifdef CONFIG_THINGSET_CAN_REPORT_QUEUE
