@@ -172,10 +172,8 @@ static void thingset_can_addr_claim_rx_cb(const struct device *dev, struct can_f
     /* Optimization: store in internal database to exclude from potentially available addresses */
 }
 
-static void thingset_can_report_rx_cb(const struct device *dev, struct can_frame *frame,
-                                      void *user_data)
+static void thingset_can_report_rx(const struct thingset_can *ts_can, struct can_frame *frame)
 {
-    const struct thingset_can *ts_can = user_data;
     uint16_t data_id = THINGSET_CAN_DATA_ID_GET(frame->id);
     uint8_t source_addr = THINGSET_CAN_SOURCE_GET(frame->id);
 #ifdef CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_RX
@@ -195,17 +193,18 @@ static void thingset_can_report_rx_cb(const struct device *dev, struct can_frame
                 }
                 uint8_t *buf = net_buf_add(buffer, size);
                 int pos = 0;
+                LOG_DBG("Reassembling %d bytes for data ID %x from node %x", size, data_id, source_addr);
                 bool finished =
                     reassemble(frame->data + 1, size, buf, size, &pos, &(context->escape));
                 if (pos < size) {
+                    LOG_DBG("Trimming %d bytes", size - pos);
                     /* if we over-allocated, trim the buffer */
                     net_buf_remove_mem(buffer, size - pos);
                 }
                 if (finished) {
+                    LOG_DBG("Finished; dispatching %d bytes for data ID %x from node %x", buffer->len, data_id, source_addr);
                     /* full message received */
                     ts_can->report_rx_cb(data_id, buffer->data, buffer->len, source_addr);
-                    LOG_DBG("Dispatching packetised message from %x for data ID %x", source_addr,
-                            data_id);
                     thingset_can_free_rx_buf(buffer);
                 }
             }
@@ -220,6 +219,21 @@ static void thingset_can_report_rx_cb(const struct device *dev, struct can_frame
     {
         ts_can->report_rx_cb(data_id, frame->data, can_dlc_to_bytes(frame->dlc), source_addr);
     }
+}
+
+static void thingset_can_report_rx_cb(const struct device *dev, struct can_frame *frame,
+                                      void *user_data)
+{
+    struct thingset_can *ts_can = user_data;
+#ifdef CONFIG_THINGSET_CAN_REPORT_QUEUE
+    int err = k_msgq_put(&ts_can->report_rx_queue, frame, K_NO_WAIT);
+    if (err != 0) {
+        LOG_ERR("Message queue %p error %d (blame sender %x)", ts_can->report_rx_queue,
+                err, frame->id);
+    }
+#else
+    thingset_can_report_rx(ts_can, frame);
+#endif
 }
 
 static void thingset_can_report_tx_cb(const struct device *dev, int error, void *user_data)
@@ -634,3 +648,27 @@ K_THREAD_DEFINE(thingset_can, CONFIG_THINGSET_CAN_THREAD_STACK_SIZE, thingset_ca
                 NULL, NULL, CONFIG_THINGSET_CAN_THREAD_PRIORITY, 0, 0);
 
 #endif /* !CONFIG_THINGSET_CAN_MULTIPLE_INSTANCES */
+
+
+#ifdef CONFIG_THINGSET_CAN_REPORT_QUEUE
+void thingset_can_report_rx_thread(void *arg)
+{
+    LOG_INF("Starting CAN report RX thread");
+    struct thingset_can *ts_can = arg;
+    k_msgq_init(&ts_can->report_rx_queue, (char *)&ts_can->report_rx_queue_buffer,
+        sizeof(struct can_frame), THINGSET_CAN_REPORT_QUEUE_MAX_MESSAGES);
+
+    LOG_INF("Initialised queue");
+    struct can_frame frame;
+    while (k_msgq_get(&ts_can->report_rx_queue, &frame, K_FOREVER) == 0) {
+        thingset_can_report_rx(ts_can, &frame);
+    }
+}
+
+#ifndef CONFIG_THINGSET_CAN_MULTIPLE_INSTANCES
+K_THREAD_DEFINE(thingset_can_report_rx, CONFIG_THINGSET_CAN_THREAD_STACK_SIZE,
+                thingset_can_report_rx_thread, &ts_can_single, NULL, NULL,
+                CONFIG_THINGSET_CAN_THREAD_PRIORITY, 0, 0);
+#endif
+
+#endif
