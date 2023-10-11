@@ -678,6 +678,7 @@ static void send_state_machine(struct isotp_fast_send_ctx *sctx)
 
         case ISOTP_TX_ERR:
             LOG_DBG("SM error");
+            free_send_ctx(&sctx);
             __fallthrough;
 
         /*
