@@ -9,6 +9,7 @@
 
 #include <zephyr/canbus/isotp.h>
 #include <zephyr/device.h>
+#include "isotp_fast.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -147,8 +148,7 @@ struct thingset_can
     const struct device *dev;
     struct k_work_delayable reporting_work;
     struct k_work_delayable addr_claim_work;
-    struct isotp_recv_ctx recv_ctx;
-    struct isotp_send_ctx send_ctx;
+    struct isotp_fast_ctx ctx;
     struct isotp_msg_id rx_addr;
     struct isotp_msg_id tx_addr;
     struct k_event events;
