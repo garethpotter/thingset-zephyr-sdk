@@ -74,6 +74,12 @@ config THINGSET_CAN_MULTIPLE_INSTANCES
       for a dedicated CAN device and and messages have to be processed
       manually in application threads.
 
+config THINGSET_CAN_REPORT_QUEUE
+    bool "Place received reports in a queue"
+    help
+      If enabled, received reports are placed in a queue to offload
+      processing.
+
 config THINGSET_CAN_RESPONSE_DELAY
     int "ThingSet CAN response delay"
     range 0 100
