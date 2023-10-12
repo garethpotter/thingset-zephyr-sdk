@@ -309,23 +309,46 @@ static void thingset_can_report_tx_handler(struct k_work *work)
     thingset_sdk_reschedule_work(dwork, K_TIMEOUT_ABS_MS(ts_can->next_pub_time));
 }
 
+void thingset_can_reset_request_response(struct thingset_can_request_response *rr)
+{
+    rr->callback = NULL;
+    rr->cb_arg = NULL;
+    rr->sender_addr = 0;
+    k_timer_stop(&rr->timer);
+    k_sem_give(&rr->sem);
+}
+
+void thingset_can_request_response_timeout_handler(struct k_timer *timer)
+{
+    struct thingset_can_request_response *rr = CONTAINER_OF(timer, struct thingset_can_request_response, timer);
+    rr->callback(NULL, 0, -ETIMEDOUT, 0, rr->cb_arg);
+    thingset_can_reset_request_response(rr);
+}
+
 int thingset_can_send_inst(struct thingset_can *ts_can, uint8_t *tx_buf, size_t tx_len,
-                           uint8_t target_addr)
+                           uint8_t target_addr, thingset_can_response_callback_t rsp_callback,
+                           void *callback_arg, k_timeout_t timeout)
 {
     if (!device_is_ready(ts_can->dev)) {
         return -ENODEV;
     }
 
-    ts_can->tx_addr.ext_id = THINGSET_CAN_TYPE_CHANNEL | THINGSET_CAN_PRIO_CHANNEL
-                             | THINGSET_CAN_TARGET_SET(target_addr)
-                             | THINGSET_CAN_SOURCE_SET(ts_can->node_addr);
+    if (rsp_callback != NULL) {
+        if (k_sem_take(&ts_can->request_response.sem, timeout) != 0) {
+            return -ETIMEDOUT;
+        }
 
-    ts_can->rx_addr.ext_id = THINGSET_CAN_TYPE_CHANNEL | THINGSET_CAN_PRIO_CHANNEL
-                             | THINGSET_CAN_TARGET_SET(ts_can->node_addr)
-                             | THINGSET_CAN_SOURCE_SET(target_addr);
-
+        ts_can->request_response.callback = rsp_callback;
+        ts_can->request_response.cb_arg = callback_arg;
+        k_timer_init(&ts_can->request_response.timer, thingset_can_request_response_timeout_handler, NULL);
+        k_timer_start(&ts_can->request_response.timer, timeout, timeout);
+        ts_can->request_response.sender_addr = THINGSET_CAN_TYPE_CHANNEL
+                                               | THINGSET_CAN_PRIO_CHANNEL
+                                               | THINGSET_CAN_TARGET_SET(ts_can->node_addr)
+                                               | THINGSET_CAN_SOURCE_SET(target_addr);
+    }
     int ret = isotp_fast_send(&ts_can->ctx, tx_buf, tx_len,
-                         ts_can->rx_addr.ext_id, NULL);
+                              target_addr, ts_can);
 
     if (ret == ISOTP_N_OK) {
         return 0;
@@ -352,19 +375,30 @@ void isotp_fast_recv_callback(struct net_buf *buffer, int rem_len, isotp_fast_ms
     if (rem_len == 0)
     {
         size_t len = net_buf_frags_len(buffer);
-        uint8_t temp[128];
-        net_buf_linearize(temp, sizeof(temp), buffer, 0, len);
-        struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
-        int tx_len = thingset_process_message(&ts, temp, len, sbuf->data, sbuf->size);
-        if (tx_len > 0) {
-            isotp_fast_node_id target_id = (uint8_t)(sender_addr & 0xFF);
-            thingset_can_send_inst(ts_can, sbuf->data, tx_len, target_id);
+        net_buf_linearize(ts_can->rx_buffer, sizeof(ts_can->rx_buffer), buffer, 0, len);
+        if (ts_can->request_response.callback != NULL &&
+            ts_can->request_response.sender_addr == sender_addr) {
+            ts_can->request_response.callback(ts_can->rx_buffer, len, 0, (uint8_t)(sender_addr & 0xFF),
+                                              ts_can->request_response.cb_arg);
+            thingset_can_reset_request_response(&ts_can->request_response);
+        } else {
+            struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
+            int tx_len = thingset_process_message(&ts, ts_can->rx_buffer, len, sbuf->data, sbuf->size);
+            if (tx_len > 0) {
+                isotp_fast_node_id target_id = (uint8_t)(sender_addr & 0xFF);
+                thingset_can_send_inst(ts_can, sbuf->data, tx_len, target_id, NULL, NULL, K_NO_WAIT);
+            }
         }
     }
 }
 
 void isotp_fast_sent_callback(int result, void *arg)
 {
+    struct thingset_can *ts_can = arg;
+    if (ts_can->request_response.callback != NULL && result != 0) {
+        ts_can->request_response.callback(NULL, 0, result, 0, ts_can->request_response.cb_arg);
+        thingset_can_reset_request_response(&ts_can->request_response);
+    }
 }
 
 int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can_dev)
@@ -385,7 +419,7 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
         sys_slist_init(&rx_buf_lookup[i]);
     }
 #endif
-
+    k_sem_init(&ts_can->request_response.sem, 1, 1);
     k_work_init_delayable(&ts_can->reporting_work, thingset_can_report_tx_handler);
     k_work_init_delayable(&ts_can->addr_claim_work, thingset_can_addr_claim_tx_handler);
 
@@ -463,14 +497,6 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
     thingset_storage_save_queued();
 #endif
 
-    ts_can->rx_addr.ide = 1;
-    ts_can->rx_addr.use_ext_addr = 0;   /* Normal ISO-TP addressing (using only CAN ID) */
-    ts_can->rx_addr.use_fixed_addr = 1; /* enable SAE J1939 compatible addressing */
-
-    ts_can->tx_addr.ide = 1;
-    ts_can->tx_addr.use_ext_addr = 0;
-    ts_can->tx_addr.use_fixed_addr = 1;
-
     struct can_filter addr_discovery_filter = {
         .id = THINGSET_CAN_TYPE_NETWORK | THINGSET_CAN_SOURCE_SET(THINGSET_CAN_ADDR_ANONYMOUS)
               | THINGSET_CAN_TARGET_SET(ts_can->node_addr),
@@ -544,9 +570,12 @@ static struct thingset_can ts_can_single = {
 THINGSET_ADD_ITEM_UINT8(TS_ID_NET, TS_ID_NET_CAN_NODE_ADDR, "pCANNodeAddr",
                         &ts_can_single.node_addr, THINGSET_ANY_RW, TS_SUBSET_NVM);
 
-int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint8_t target_addr)
+int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint8_t target_addr,
+                      thingset_can_response_callback_t rsp_callback,
+                      void *callback_arg, k_timeout_t timeout)
 {
-    return thingset_can_send_inst(&ts_can_single, tx_buf, tx_len, target_addr);
+    return thingset_can_send_inst(&ts_can_single, tx_buf, tx_len, target_addr,
+                                  rsp_callback, callback_arg, timeout);
 }
 
 int thingset_can_set_report_rx_callback(thingset_can_report_rx_callback_t rx_cb)
