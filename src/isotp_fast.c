@@ -20,7 +20,7 @@ K_MEM_SLAB_DEFINE(isotp_send_ctx_slab, sizeof(struct isotp_fast_send_ctx),
 K_MEM_SLAB_DEFINE(isotp_recv_ctx_slab, sizeof(struct isotp_fast_recv_ctx),
     CONFIG_ISOTP_RX_BUF_COUNT, 4);
 
-NET_BUF_POOL_DEFINE(isotp_rx_pool, CONFIG_ISOTP_RX_BUF_COUNT,
+NET_BUF_POOL_DEFINE(isotp_rx_pool, CONFIG_ISOTP_RX_BUF_COUNT * 8,
     CAN_MAX_DLEN - 1, sizeof(struct isotp_fast_recv_ctx *), NULL);
 
 static sys_slist_t isotp_send_ctx_list;
@@ -67,6 +67,15 @@ static inline void free_send_ctx(struct isotp_fast_send_ctx **ctx)
     k_mem_slab_free(&isotp_send_ctx_slab, (void **)ctx);
 }
 
+static inline void free_recv_ctx(struct isotp_fast_recv_ctx **rctx)
+{
+    LOG_DBG("Freeing receive context %x", (*rctx)->sender_addr);
+    k_timer_stop(&(*rctx)->timer);
+    sys_slist_find_and_remove(&isotp_recv_ctx_list, &(*rctx)->node);
+    net_buf_unref((*rctx)->buffer);
+    k_mem_slab_free(&isotp_recv_ctx_slab, (void **)rctx);
+}
+
 static int get_recv_ctx(struct isotp_fast_ctx *ctx,
                         isotp_fast_msg_id sender_addr,
                         struct isotp_fast_recv_ctx **rctx)
@@ -83,6 +92,11 @@ static int get_recv_ctx(struct isotp_fast_ctx *ctx,
             LOG_DBG("Found existing receive context %x", sender_addr);
             *rctx = context;
             context->frag = net_buf_alloc(&isotp_rx_pool, K_NO_WAIT);
+            if (context->frag == NULL) {
+                LOG_ERR("No free buffers");
+                free_recv_ctx(rctx);
+                return ISOTP_NO_NET_BUF_LEFT;
+            }
             p_ctx = net_buf_user_data(context->buffer);
             *p_ctx = context;
             net_buf_frag_add(context->buffer, context->frag);
@@ -114,15 +128,6 @@ static int get_recv_ctx(struct isotp_fast_ctx *ctx,
     LOG_DBG("Created new receive context %x", sender_addr);
 
     return 0;
-}
-
-static inline void free_recv_ctx(struct isotp_fast_recv_ctx **rctx)
-{
-    LOG_DBG("Freeing receive context %x", (*rctx)->sender_addr);
-    k_timer_stop(&(*rctx)->timer);
-    sys_slist_find_and_remove(&isotp_recv_ctx_list, &(*rctx)->node);
-    net_buf_unref((*rctx)->buffer);
-    k_mem_slab_free(&isotp_recv_ctx_slab, (void **)rctx);
 }
 
 static inline void receive_report_error(struct isotp_fast_recv_ctx *rctx, int err)
@@ -257,7 +262,7 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *ctx)
 
         case ISOTP_RX_STATE_SEND_WAIT:
             if (++ctx->wft < CONFIG_ISOTP_WFTMAX) {
-                LOG_INF("Send wait frame number %d", ctx->wft);
+                LOG_DBG("Send wait frame number %d", ctx->wft);
                 receive_send_fc(ctx, ISOTP_PCI_FS_WAIT);
                 k_timer_start(&ctx->timer, K_MSEC(ISOTP_ALLOC_TIMEOUT), K_NO_WAIT);
                 ctx->state = ISOTP_RX_STATE_TRY_ALLOC;
@@ -284,6 +289,7 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *ctx)
         case ISOTP_RX_STATE_RECYCLE:
             LOG_DBG("Message complete; dispatching");
             ctx->ctx->recv_callback(ctx->buffer, 0, ctx->sender_addr, ctx->ctx->recv_cb_arg);
+            ctx->state = ISOTP_RX_STATE_UNBOUND;
             free_recv_ctx(&ctx);
             break;
         case ISOTP_RX_STATE_UNBOUND:
@@ -361,8 +367,7 @@ static void process_cf(struct isotp_fast_recv_ctx *rctx, struct can_frame *frame
     }
 
     LOG_DBG("Got CF irq. Appending data");
-    data_len = (rctx->rem_len > frame->dlc - index) ? frame->dlc - index :
-        rctx->rem_len;
+    data_len = MIN(rctx->rem_len, frame->dlc - index);
     net_buf_add_mem(rctx->frag, &frame->data[index], data_len);
     rctx->rem_len -= data_len;
     LOG_DBG("Added %d bytes; %d bytes remaining", data_len, rctx->rem_len);
@@ -413,7 +418,6 @@ static void receive_can_rx(struct isotp_fast_recv_ctx *rctx, struct can_frame *f
 {
     switch (rctx->state) {
         case ISOTP_RX_STATE_WAIT_FF_SF:
-            //__ASSERT_NO_MSG(rctx->buf);
             process_ff_sf(rctx, frame);
             break;
 
@@ -423,16 +427,10 @@ static void receive_can_rx(struct isotp_fast_recv_ctx *rctx, struct can_frame *f
             if (rctx->state == ISOTP_RX_STATE_WAIT_CF) {
                 return;
             }
-
             break;
 
-        // case ISOTP_RX_STATE_RECYCLE:
-        //     LOG_ERR("Got a frame but was not yet ready for a new one");
-        //     receive_report_error(rctx, ISOTP_N_BUFFER_OVERFLW);
-        //     break;
-
         default:
-            LOG_INF("Got a frame in a state where it is unexpected.");
+            LOG_DBG("Got a frame in a state where it is unexpected.");
     }
 
     k_work_submit(&rctx->work);
