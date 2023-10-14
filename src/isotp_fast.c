@@ -15,13 +15,14 @@ static void receive_timeout_handler(struct k_timer *timer);
 static void receive_state_machine(struct isotp_fast_recv_ctx *ctx);
 
 K_MEM_SLAB_DEFINE(isotp_send_ctx_slab, sizeof(struct isotp_fast_send_ctx),
-    CONFIG_ISOTP_TX_BUF_COUNT, 4);
+                  CONFIG_ISOTP_TX_BUF_COUNT, 4);
 
 K_MEM_SLAB_DEFINE(isotp_recv_ctx_slab, sizeof(struct isotp_fast_recv_ctx),
-    CONFIG_ISOTP_RX_BUF_COUNT, 4);
+                  CONFIG_ISOTP_RX_BUF_COUNT, 4);
 
-NET_BUF_POOL_DEFINE(isotp_rx_pool, CONFIG_ISOTP_RX_BUF_COUNT * 8,
-    CAN_MAX_DLEN - 1, sizeof(struct isotp_fast_recv_ctx *), NULL);
+NET_BUF_POOL_DEFINE(isotp_rx_pool, CONFIG_ISOTP_RX_BUF_COUNT *
+                    CONFIG_ISOTP_RX_MAX_PACKET_COUNT, CAN_MAX_DLEN - 1,
+                    sizeof(struct isotp_fast_recv_ctx *), NULL);
 
 static sys_slist_t isotp_send_ctx_list;
 static sys_slist_t isotp_recv_ctx_list;
