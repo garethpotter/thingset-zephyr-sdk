@@ -12,7 +12,7 @@ LOG_MODULE_REGISTER(isotp_fast, CONFIG_ISOTP_LOG_LEVEL);
 
 static void receive_work_handler(struct k_work *item);
 static void receive_timeout_handler(struct k_timer *timer);
-static void receive_state_machine(struct isotp_fast_recv_ctx *ctx);
+static void receive_state_machine(struct isotp_fast_recv_ctx *rctx);
 
 K_MEM_SLAB_DEFINE(isotp_send_ctx_slab, sizeof(struct isotp_fast_send_ctx),
                   CONFIG_ISOTP_TX_BUF_COUNT, 4);
@@ -171,22 +171,22 @@ static inline uint32_t receive_get_sf_length(uint8_t *data)
 
 static void receive_can_tx(const struct device *dev, int error, void *arg)
 {
-	struct isotp_fast_recv_ctx *ctx = (struct isotp_fast_recv_ctx *)arg;
+	struct isotp_fast_recv_ctx *rctx = (struct isotp_fast_recv_ctx *)arg;
 
 	ARG_UNUSED(dev);
 
 	if (error != 0) {
 		LOG_ERR("Error sending FC frame (%d)", error);
-		receive_report_error(ctx, ISOTP_N_ERROR);
-		k_work_submit(&ctx->work);
+		receive_report_error(rctx, ISOTP_N_ERROR);
+		k_work_submit(&rctx->work);
 	}
 }
 
-static void receive_send_fc(struct isotp_fast_recv_ctx *ctx, uint8_t fs)
+static void receive_send_fc(struct isotp_fast_recv_ctx *rctx, uint8_t fs)
 {
 	struct can_frame frame = {
 		.flags = CAN_FRAME_IDE,
-		.id = (ctx->sender_addr & 0xFFFF0000) | ((ctx->sender_addr & 0xFF00) >> 8) | ((ctx->sender_addr & 0xFF) << 8)
+		.id = (rctx->sender_addr & 0xFFFF0000) | ((rctx->sender_addr & 0xFF00) >> 8) | ((rctx->sender_addr & 0xFF) << 8)
 	};
 	uint8_t *data = frame.data;
 	uint8_t payload_len;
@@ -195,88 +195,88 @@ static void receive_send_fc(struct isotp_fast_recv_ctx *ctx, uint8_t fs)
 	__ASSERT_NO_MSG(!(fs & ISOTP_PCI_TYPE_MASK));
 
 	*data++ = ISOTP_PCI_TYPE_FC | fs;
-	*data++ = ctx->ctx->opts->bs;
-	*data++ = ctx->ctx->opts->stmin;
+	*data++ = rctx->ctx->opts->bs;
+	*data++ = rctx->ctx->opts->stmin;
 	payload_len = data - frame.data;
     frame.dlc = can_bytes_to_dlc(payload_len);
 
-	ret = can_send(ctx->ctx->can_dev, &frame, K_MSEC(ISOTP_A),
-		       receive_can_tx, ctx);
+	ret = can_send(rctx->ctx->can_dev, &frame, K_MSEC(ISOTP_A_TIMEOUT_MS),
+		       receive_can_tx, rctx);
 	if (ret) {
 		LOG_ERR("Can't send FC, (%d)", ret);
-		receive_report_error(ctx, ISOTP_N_TIMEOUT_A);
-		receive_state_machine(ctx);
+		receive_report_error(rctx, ISOTP_N_TIMEOUT_A);
+		receive_state_machine(rctx);
 	}
 }
 
-static void receive_state_machine(struct isotp_fast_recv_ctx *ctx)
+static void receive_state_machine(struct isotp_fast_recv_ctx *rctx)
 {
-    switch (ctx->state) {
+    switch (rctx->state) {
         case ISOTP_RX_STATE_PROCESS_SF:
-            LOG_DBG("SM process SF of length %d", ctx->rem_len);
-            ctx->rem_len = 0;
-            ctx->state = ISOTP_RX_STATE_RECYCLE;
-            receive_state_machine(ctx);
+            LOG_DBG("SM process SF of length %d", rctx->rem_len);
+            rctx->rem_len = 0;
+            rctx->state = ISOTP_RX_STATE_RECYCLE;
+            receive_state_machine(rctx);
             break;
 
         case ISOTP_RX_STATE_PROCESS_FF:
-            LOG_DBG("SM process FF. Length: %d", ctx->rem_len);
-            ctx->rem_len -= ctx->frag->len;
-            if (ctx->ctx->opts->bs == 0 &&
-                ctx->rem_len > CONFIG_ISOTP_RX_BUF_COUNT *
+            LOG_DBG("SM process FF. Length: %d", rctx->rem_len);
+            rctx->rem_len -= rctx->frag->len;
+            if (rctx->ctx->opts->bs == 0 &&
+                rctx->rem_len > CONFIG_ISOTP_RX_BUF_COUNT *
                 CONFIG_ISOTP_RX_BUF_SIZE) {
                 LOG_ERR("Pkt length is %d but buffer has only %d bytes",
-                    ctx->rem_len,
+                    rctx->rem_len,
                     CONFIG_ISOTP_RX_BUF_COUNT *
                     CONFIG_ISOTP_RX_BUF_SIZE);
-                receive_report_error(ctx, ISOTP_N_BUFFER_OVERFLW);
-                receive_state_machine(ctx);
+                receive_report_error(rctx, ISOTP_N_BUFFER_OVERFLW);
+                receive_state_machine(rctx);
                 break;
             }
 
-            if (ctx->ctx->opts->bs) {
-                ctx->bs = ctx->ctx->opts->bs;
+            if (rctx->ctx->opts->bs) {
+                rctx->bs = rctx->ctx->opts->bs;
                 // ctx->ctx->recv_callback(ctx->buffer, ctx->rem_len, ctx->sender_addr, ctx->ctx->recv_cb_arg);
                 // LOG_INF("Dispatched chunk of length %d; remaining %d", ctx->buffer->len, ctx->rem_len);
             }
 
-            ctx->wft = ISOTP_WFT_FIRST;
-            ctx->state = ISOTP_RX_STATE_TRY_ALLOC;
+            rctx->wft = ISOTP_WFT_FIRST;
+            rctx->state = ISOTP_RX_STATE_TRY_ALLOC;
             __fallthrough;
         case ISOTP_RX_STATE_TRY_ALLOC:
             LOG_DBG("SM try to allocate");
-            k_timer_stop(&ctx->timer);
+            k_timer_stop(&rctx->timer);
             // ret = receive_alloc_buffer(ctx);
             // if (ret) {
             //     LOG_DBG("SM allocation failed. Wait for free buffer");
             //     break;
             // }
 
-            ctx->state = ISOTP_RX_STATE_SEND_FC;
+            rctx->state = ISOTP_RX_STATE_SEND_FC;
             __fallthrough;
         case ISOTP_RX_STATE_SEND_FC:
             LOG_DBG("SM send CTS FC frame");
-            receive_send_fc(ctx, ISOTP_PCI_FS_CTS);
-            k_timer_start(&ctx->timer, K_MSEC(ISOTP_CR), K_NO_WAIT);
-            ctx->state = ISOTP_RX_STATE_WAIT_CF;
+            receive_send_fc(rctx, ISOTP_PCI_FS_CTS);
+            k_timer_start(&rctx->timer, K_MSEC(ISOTP_CR_TIMEOUT_MS), K_NO_WAIT);
+            rctx->state = ISOTP_RX_STATE_WAIT_CF;
             break;
 
         case ISOTP_RX_STATE_SEND_WAIT:
-            if (++ctx->wft < CONFIG_ISOTP_WFTMAX) {
-                LOG_DBG("Send wait frame number %d", ctx->wft);
-                receive_send_fc(ctx, ISOTP_PCI_FS_WAIT);
-                k_timer_start(&ctx->timer, K_MSEC(ISOTP_ALLOC_TIMEOUT), K_NO_WAIT);
-                ctx->state = ISOTP_RX_STATE_TRY_ALLOC;
+            if (++rctx->wft < CONFIG_ISOTP_WFTMAX) {
+                LOG_DBG("Send wait frame number %d", rctx->wft);
+                receive_send_fc(rctx, ISOTP_PCI_FS_WAIT);
+                k_timer_start(&rctx->timer, K_MSEC(ISOTP_ALLOC_TIMEOUT_MS), K_NO_WAIT);
+                rctx->state = ISOTP_RX_STATE_TRY_ALLOC;
                 break;
             }
 
             LOG_ERR("Sent %d wait frames. Giving up to alloc now",
-                ctx->wft);
-            receive_report_error(ctx, ISOTP_N_BUFFER_OVERFLW);
+                rctx->wft);
+            receive_report_error(rctx, ISOTP_N_BUFFER_OVERFLW);
             __fallthrough;
         case ISOTP_RX_STATE_ERR:
             //LOG_DBG("SM ERR state. err nr: %d", ctx->error_nr);
-            k_timer_stop(&ctx->timer);
+            k_timer_stop(&rctx->timer);
 
             // if (ctx->error_nr == ISOTP_N_BUFFER_OVERFLW) {
             //     receive_send_fc(ctx, ISOTP_PCI_FS_OVFLW);
@@ -285,13 +285,13 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *ctx)
             // net_buf_unref(ctx->buffer);
             // ctx->buffer = NULL;
             // ctx->state = ISOTP_RX_STATE_RECYCLE;
-            free_recv_ctx(&ctx);
+            free_recv_ctx(&rctx);
             __fallthrough;
         case ISOTP_RX_STATE_RECYCLE:
             LOG_DBG("Message complete; dispatching");
-            ctx->ctx->recv_callback(ctx->buffer, 0, ctx->sender_addr, ctx->ctx->recv_cb_arg);
-            ctx->state = ISOTP_RX_STATE_UNBOUND;
-            free_recv_ctx(&ctx);
+            rctx->ctx->recv_callback(rctx->buffer, 0, rctx->sender_addr, rctx->ctx->recv_cb_arg);
+            rctx->state = ISOTP_RX_STATE_UNBOUND;
+            free_recv_ctx(&rctx);
             break;
         case ISOTP_RX_STATE_UNBOUND:
             break;
@@ -301,7 +301,7 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *ctx)
     }
 }
 
-static void process_ff_sf(struct isotp_fast_recv_ctx *ctx, struct can_frame *frame)
+static void process_ff_sf(struct isotp_fast_recv_ctx *rctx, struct can_frame *frame)
 {
     int index = 0;
     uint8_t payload_len;
@@ -314,26 +314,26 @@ static void process_ff_sf(struct isotp_fast_recv_ctx *ctx, struct can_frame *fra
                 return;
             }
 
-            ctx->rem_len = receive_get_ff_length(frame->data);
-            ctx->state = ISOTP_RX_STATE_PROCESS_FF;
-            ctx->sn_expected = 1;
+            rctx->rem_len = receive_get_ff_length(frame->data);
+            rctx->state = ISOTP_RX_STATE_PROCESS_FF;
+            rctx->sn_expected = 1;
             index += 2;
             payload_len = CAN_MAX_DLEN - index;
-            LOG_DBG("FF total length %d, FF len %d", ctx->rem_len, payload_len);
+            LOG_DBG("FF total length %d, FF len %d", rctx->rem_len, payload_len);
             break;
 
         case ISOTP_PCI_TYPE_SF:
             LOG_DBG("Got SF IRQ");
-            ctx->rem_len = receive_get_sf_length(frame->data);
+            rctx->rem_len = receive_get_sf_length(frame->data);
             index++;
-            payload_len = MIN(ctx->rem_len, CAN_MAX_DLEN - index);
+            payload_len = MIN(rctx->rem_len, CAN_MAX_DLEN - index);
             LOG_DBG("SF length %d", payload_len);
             if (payload_len > frame->dlc) {
                 LOG_DBG("SF DL does not fit. Ignore");
                 return;
             }
 
-            ctx->state = ISOTP_RX_STATE_PROCESS_SF;
+            rctx->state = ISOTP_RX_STATE_PROCESS_SF;
             break;
 
         default:
@@ -341,8 +341,8 @@ static void process_ff_sf(struct isotp_fast_recv_ctx *ctx, struct can_frame *fra
             return;
     }
 
-    LOG_DBG("Current buffer size %d; adding %d", ctx->buffer->len, payload_len);
-    net_buf_add_mem(ctx->frag, &frame->data[index], payload_len);
+    LOG_DBG("Current buffer size %d; adding %d", rctx->buffer->len, payload_len);
+    net_buf_add_mem(rctx->frag, &frame->data[index], payload_len);
 }
 
 static void process_cf(struct isotp_fast_recv_ctx *rctx, struct can_frame *frame)
@@ -358,7 +358,7 @@ static void process_cf(struct isotp_fast_recv_ctx *rctx, struct can_frame *frame
         return;
     }
 
-    k_timer_start(&rctx->timer, K_MSEC(ISOTP_CR), K_NO_WAIT);
+    k_timer_start(&rctx->timer, K_MSEC(ISOTP_CR_TIMEOUT_MS), K_NO_WAIT);
 
     if ((frame->data[index++] & ISOTP_PCI_SN_MASK) != rctx->sn_expected++) {
         LOG_ERR("Sequence number mismatch");
@@ -485,7 +485,7 @@ static void send_process_fc(struct isotp_fast_send_ctx *sctx, struct can_frame *
 
         case ISOTP_PCI_FS_WAIT:
             LOG_DBG("Got WAIT frame");
-            k_timer_start(&sctx->timer, K_MSEC(ISOTP_BS), K_NO_WAIT);
+            k_timer_start(&sctx->timer, K_MSEC(ISOTP_BS_TIMEOUT_MS), K_NO_WAIT);
             if (sctx->wft >= CONFIG_ISOTP_WFTMAX) {
                 LOG_WRN("Got too many wait frames");
                 send_report_error(sctx, ISOTP_N_WFT_OVRN);
@@ -522,7 +522,7 @@ static void can_rx_callback(const struct device *dev, struct can_frame *frame, v
     struct isotp_fast_ctx *ctx = arg;
     int index = 0;
     isotp_fast_msg_id sender_id = (frame->id & 0xFFFF0000) | ((frame->id & 0xFF00) >> 8) | ((frame->id & 0xFF) << 8);
-    if ((frame->data[index++] & 0xF0) == 0x30) {
+    if ((frame->data[index++] & ISOTP_PCI_TYPE_MASK) == ISOTP_PCI_TYPE_FC) {
         LOG_DBG("Got flow control frame from %x", frame->id);
         /* inbound flow control for a message we are currently transmitting */
         struct isotp_fast_send_ctx *sctx;
@@ -593,7 +593,7 @@ static inline int send_ff(struct isotp_fast_send_ctx *sctx)
     sctx->data += size;
     frame.dlc = can_bytes_to_dlc(CAN_MAX_DLEN);
 
-    ret = can_send(sctx->ctx->can_dev, &frame, K_MSEC(ISOTP_A), send_can_tx_callback, sctx);
+    ret = can_send(sctx->ctx->can_dev, &frame, K_MSEC(ISOTP_A_TIMEOUT_MS), send_can_tx_callback, sctx);
     return ret;
 }
 
@@ -616,7 +616,7 @@ static inline int send_cf(struct isotp_fast_send_ctx *sctx)
 
     frame.dlc = can_bytes_to_dlc(len + index);
 
-    ret = can_send(sctx->ctx->can_dev, &frame, K_MSEC(ISOTP_A), send_can_tx_callback, sctx);
+    ret = can_send(sctx->ctx->can_dev, &frame, K_MSEC(ISOTP_A_TIMEOUT_MS), send_can_tx_callback, sctx);
     if (ret == 0) {
         sctx->sn++;
         sctx->bs--;
@@ -633,7 +633,7 @@ static void send_state_machine(struct isotp_fast_send_ctx *sctx)
     switch (sctx->state) {
         case ISOTP_TX_SEND_FF:
             send_ff(sctx);
-            k_timer_start(&sctx->timer, K_MSEC(ISOTP_BS), K_NO_WAIT);
+            k_timer_start(&sctx->timer, K_MSEC(ISOTP_BS_TIMEOUT_MS), K_NO_WAIT);
             sctx->state = ISOTP_TX_WAIT_FC;
             break;
 
@@ -655,7 +655,7 @@ static void send_state_machine(struct isotp_fast_send_ctx *sctx)
                 }
 
                 if (sctx->ctx->opts->bs && !sctx->bs) {
-                    k_timer_start(&sctx->timer, K_MSEC(ISOTP_BS), K_NO_WAIT);
+                    k_timer_start(&sctx->timer, K_MSEC(ISOTP_BS_TIMEOUT_MS), K_NO_WAIT);
                     sctx->state = ISOTP_TX_WAIT_FC;
                     LOG_DBG("BS reached. Wait for FC again");
                     break;
@@ -783,7 +783,7 @@ int isotp_fast_send(struct isotp_fast_ctx *ctx,
         };
         frame.data[0] = (uint8_t)len;
         memcpy(&frame.data[1], data, len);
-        int ret = can_send(ctx->can_dev, &frame, K_MSEC(ISOTP_A),
+        int ret = can_send(ctx->can_dev, &frame, K_MSEC(ISOTP_A_TIMEOUT_MS),
             NULL, NULL);
         ctx->sent_callback(ret, cb_arg);
         return ISOTP_N_OK;
