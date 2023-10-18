@@ -260,9 +260,11 @@ static void thingset_can_report_tx_handler(struct k_work *work)
             int chunk_len;
             uint8_t seq = 0;
             uint8_t *body = frame.data + 1;
+            // clang-format off
             while ((chunk_len = packetize(sbuf->data, data_len, body, CAN_MAX_DLEN - 1, &pos_buf))
                    != 0)
             {
+                // clang-format on
                 frame.data[0] = seq++;
                 frame.dlc = chunk_len + 1;
                 err = can_send(ts_can->dev, &frame,
