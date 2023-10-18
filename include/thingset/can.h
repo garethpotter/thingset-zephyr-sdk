@@ -129,8 +129,6 @@ extern "C" {
      && THINGSET_CAN_PRIO_GET(id) >= 4)
 #define THINGSET_CAN_CHANNEL(id) ((id & THINGSET_CAN_TYPE_MASK) == THINGSET_CAN_TYPE_CHANNEL)
 
-#define THINGSET_CAN_REPORT_QUEUE_MAX_MESSAGES 32
-
 /**
  * Callback typedef for received ThingSet report via CAN
  *
@@ -178,10 +176,6 @@ struct thingset_can
     int64_t next_pub_time;
     uint8_t node_addr;
     bool pub_enable;
-#ifdef CONFIG_THINGSET_CAN_REPORT_QUEUE
-    struct k_msgq report_rx_queue;
-    char report_rx_queue_buffer[THINGSET_CAN_REPORT_QUEUE_MAX_MESSAGES * sizeof(struct can_frame)];
-#endif
 };
 
 #ifdef CONFIG_THINGSET_CAN_MULTIPLE_INSTANCES
@@ -323,10 +317,6 @@ int thingset_can_set_report_rx_callback(thingset_can_report_rx_callback_t rx_cb)
 struct thingset_can *thingset_can_get_inst();
 
 #endif /* CONFIG_THINGSET_CAN_MULTIPLE_INSTANCES */
-
-#ifdef CONFIG_THINGSET_CAN_REPORT_QUEUE
-void thingset_can_report_rx_thread(void *arg);
-#endif
 
 #ifdef __cplusplus
 }

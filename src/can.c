@@ -177,8 +177,10 @@ static void thingset_can_addr_claim_rx_cb(const struct device *dev, struct can_f
     /* Optimization: store in internal database to exclude from potentially available addresses */
 }
 
-static void thingset_can_report_rx(const struct thingset_can *ts_can, struct can_frame *frame)
+static void thingset_can_report_rx_cb(const struct device *dev, struct can_frame *frame,
+                                      void *user_data)
 {
+    struct thingset_can *ts_can = user_data;
     uint16_t data_id = THINGSET_CAN_DATA_ID_GET(frame->id);
     uint8_t source_addr = THINGSET_CAN_SOURCE_GET(frame->id);
 #ifdef CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_RX
@@ -228,21 +230,6 @@ static void thingset_can_report_rx(const struct thingset_can *ts_can, struct can
     }
 }
 
-static void thingset_can_report_rx_cb(const struct device *dev, struct can_frame *frame,
-                                      void *user_data)
-{
-    struct thingset_can *ts_can = user_data;
-#ifdef CONFIG_THINGSET_CAN_REPORT_QUEUE
-    int err = k_msgq_put(&ts_can->report_rx_queue, frame, K_NO_WAIT);
-    if (err != 0) {
-        LOG_ERR("Message queue %p error %d (blame sender %x)", ts_can->report_rx_queue, err,
-                frame->id);
-    }
-#else
-    thingset_can_report_rx(ts_can, frame);
-#endif
-}
-
 static void thingset_can_report_tx_cb(const struct device *dev, int error, void *user_data)
 {
     /* Do nothing: Reports are fire and forget. */
@@ -274,7 +261,8 @@ static void thingset_can_report_tx_handler(struct k_work *work)
             uint8_t seq = 0;
             uint8_t *body = frame.data + 1;
             while ((chunk_len = packetize(sbuf->data, data_len, body, CAN_MAX_DLEN - 1, &pos_buf))
-                   != 0) {
+                   != 0)
+            {
                 frame.data[0] = seq++;
                 frame.dlc = chunk_len + 1;
                 err = can_send(ts_can->dev, &frame,
@@ -669,8 +657,8 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
 #ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
     isotp_fast_msg_id my_addr = THINGSET_CAN_TYPE_CHANNEL | THINGSET_CAN_PRIO_CHANNEL
                                 | THINGSET_CAN_TARGET_SET(ts_can->node_addr);
-    isotp_fast_bind(&ts_can->ctx, can_dev, my_addr, &fc_opts, isotp_fast_recv_callback,
-                    ts_can, isotp_fast_sent_callback);
+    isotp_fast_bind(&ts_can->ctx, can_dev, my_addr, &fc_opts, isotp_fast_recv_callback, ts_can,
+                    isotp_fast_sent_callback);
 #endif
 
     thingset_sdk_reschedule_work(&ts_can->reporting_work, K_NO_WAIT);
@@ -772,27 +760,3 @@ K_THREAD_DEFINE(thingset_can, CONFIG_THINGSET_CAN_THREAD_STACK_SIZE, thingset_ca
                 NULL, NULL, CONFIG_THINGSET_CAN_THREAD_PRIORITY, 0, 0);
 
 #endif /* !CONFIG_THINGSET_CAN_MULTIPLE_INSTANCES */
-
-
-#ifdef CONFIG_THINGSET_CAN_REPORT_QUEUE
-void thingset_can_report_rx_thread(void *arg)
-{
-    LOG_INF("Starting CAN report RX thread");
-    struct thingset_can *ts_can = arg;
-    k_msgq_init(&ts_can->report_rx_queue, &ts_can->report_rx_queue_buffer,
-        sizeof(struct can_frame), THINGSET_CAN_REPORT_QUEUE_MAX_MESSAGES);
-
-    LOG_INF("Initialised queue");
-    struct can_frame frame;
-    while (k_msgq_get(&ts_can->report_rx_queue, &frame, K_FOREVER) == 0) {
-        thingset_can_report_rx(ts_can, &frame);
-    }
-}
-
-#ifndef CONFIG_THINGSET_CAN_MULTIPLE_INSTANCES
-K_THREAD_DEFINE(thingset_can_report_rx, CONFIG_THINGSET_CAN_THREAD_STACK_SIZE,
-                thingset_can_report_rx_thread, &ts_can_single, NULL, NULL,
-                CONFIG_THINGSET_CAN_THREAD_PRIORITY, 0, 0);
-#endif
-
-#endif
