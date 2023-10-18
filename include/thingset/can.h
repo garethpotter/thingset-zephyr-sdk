@@ -166,6 +166,8 @@ struct thingset_can
 #else
     struct isotp_recv_ctx recv_ctx;
     struct isotp_send_ctx send_ctx;
+    struct isotp_msg_id rx_addr;
+    struct isotp_msg_id tx_addr;
 #endif
     struct k_event events;
 #ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
