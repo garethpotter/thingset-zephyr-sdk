@@ -112,8 +112,16 @@ config THINGSET_CAN_THREAD_PRIORITY
 
       Only available for single-instance implementation.
 
+config THINGSET_CAN_USE_ISOTP_FAST
+    bool "Use new ISO-TP context"
+    depends on CAN
+    default false
+    help
+      If true, enables the new ISO-TP stack.
+
 config ISOTP_RX_MAX_PACKET_COUNT
   int "Max packets for ISO-TP reception"
+  depends on THINGSET_CAN_USE_ISOTP_FAST
   default 8
   help
     Max number of packets expected in a single ISO-TP message.

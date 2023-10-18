@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
 #include <zephyr/canbus/isotp.h>
 
 /* Represents a sender or a receiver in an ISO-TP fixed addressing scheme */
@@ -112,3 +113,4 @@ int isotp_fast_unbind(struct isotp_fast_ctx *ctx);
  */
 int isotp_fast_send(struct isotp_fast_ctx *ctx, const uint8_t *data, size_t len,
                     const isotp_fast_node_id their_id, void *sent_cb_arg);
+#endif /* THINGSET_CAN_USE_ISOTP_FAST */

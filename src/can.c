@@ -48,7 +48,12 @@ static const struct can_filter addr_claim_filter = {
     .flags = CAN_FILTER_DATA | CAN_FILTER_IDE,
 };
 
-static const struct isotp_fast_opts fc_opts = {
+#ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
+typedef struct isotp_fast_opts isotp_opts;
+#else
+typedef struct isotp_fc_opts isotp_opts;
+#endif
+static const isotp_opts fc_opts = {
     .bs = 8,    /* block size */
     .stmin = 1, /* minimum separation time = 100 ms */
 };
@@ -310,6 +315,7 @@ static void thingset_can_report_tx_handler(struct k_work *work)
     thingset_sdk_reschedule_work(dwork, K_TIMEOUT_ABS_MS(ts_can->next_pub_time));
 }
 
+#ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
 void thingset_can_reset_request_response(struct thingset_can_request_response *rr)
 {
     rr->callback = NULL;
@@ -325,7 +331,66 @@ void thingset_can_request_response_timeout_handler(struct k_timer *timer)
     rr->callback(NULL, 0, -ETIMEDOUT, 0, rr->cb_arg);
     thingset_can_reset_request_response(rr);
 }
+#else
+int thingset_can_receive_inst(struct thingset_can *ts_can, uint8_t *rx_buffer, size_t rx_buf_size,
+                              uint8_t *source_addr, k_timeout_t timeout)
+{
+    int ret, rem_len, rx_len;
+    struct net_buf *netbuf;
 
+    if (!device_is_ready(ts_can->dev)) {
+        return -ENODEV;
+    }
+
+    ts_can->rx_addr.ext_id = THINGSET_CAN_TYPE_CHANNEL | THINGSET_CAN_PRIO_CHANNEL
+                             | THINGSET_CAN_TARGET_SET(ts_can->node_addr);
+    ts_can->tx_addr.ext_id = THINGSET_CAN_TYPE_CHANNEL | THINGSET_CAN_PRIO_CHANNEL
+                             | THINGSET_CAN_SOURCE_SET(ts_can->node_addr);
+
+    ret = isotp_bind(&ts_can->recv_ctx, ts_can->dev, &ts_can->rx_addr, &ts_can->tx_addr, &fc_opts,
+                     timeout);
+    if (ret != ISOTP_N_OK) {
+        LOG_DBG("Failed to bind to rx ID %d [%d]", ts_can->rx_addr.ext_id, ret);
+        return -EIO;
+    }
+
+    rx_len = 0;
+    do {
+        /* isotp_recv not suitable because it does not indicate if the buffer was too small */
+        rem_len = isotp_recv_net(&ts_can->recv_ctx, &netbuf, timeout);
+        if (rem_len < 0) {
+            LOG_ERR("ISO-TP receiving error: %d", rem_len);
+            break;
+        }
+        if (rx_len + netbuf->len <= rx_buf_size) {
+            memcpy(&rx_buffer[rx_len], netbuf->data, netbuf->len);
+        }
+        rx_len += netbuf->len;
+        net_buf_unref(netbuf);
+    } while (rem_len);
+
+    /* we need to unbind the receive ctx so that flow control frames are received in the send ctx */
+    isotp_unbind(&ts_can->recv_ctx);
+
+    if (rx_len > rx_buf_size) {
+        LOG_ERR("ISO-TP RX buffer too small");
+        return -ENOMEM;
+    }
+    else if (rx_len > 0 && rem_len == 0) {
+        *source_addr = THINGSET_CAN_SOURCE_GET(ts_can->recv_ctx.rx_addr.ext_id);
+        LOG_DBG("ISO-TP received %d bytes from addr %d", rx_len, *source_addr);
+        return rx_len;
+    }
+    else if (rem_len == ISOTP_RECV_TIMEOUT) {
+        return -EAGAIN;
+    }
+    else {
+        return -EIO;
+    }
+}
+#endif /* CONFIG_THINGSET_CAN_USE_ISOTP_FAST */
+
+#ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
 int thingset_can_send_inst(struct thingset_can *ts_can, uint8_t *tx_buf, size_t tx_len,
                            uint8_t target_addr, thingset_can_response_callback_t rsp_callback,
                            void *callback_arg, k_timeout_t timeout)
@@ -360,12 +425,8 @@ int thingset_can_send_inst(struct thingset_can *ts_can, uint8_t *tx_buf, size_t 
     }
 }
 
-int thingset_can_process_inst(struct thingset_can *ts_can, k_timeout_t timeout)
-{
-    return 0;
-}
-
-void isotp_fast_recv_callback(struct net_buf *buffer, int rem_len, isotp_fast_msg_id sender_addr, void *arg)
+void isotp_fast_recv_callback(struct net_buf *buffer, int rem_len, isotp_fast_msg_id sender_addr,
+                              void *arg)
 {
     struct thingset_can *ts_can = arg;
 
@@ -401,6 +462,82 @@ void isotp_fast_sent_callback(int result, void *arg)
         thingset_can_reset_request_response(&ts_can->request_response);
     }
 }
+#else
+int thingset_can_send_inst(struct thingset_can *ts_can, uint8_t *tx_buf, size_t tx_len,
+                           uint8_t target_addr)
+{
+    if (!device_is_ready(ts_can->dev)) {
+        return -ENODEV;
+    }
+
+    ts_can->tx_addr.ext_id = THINGSET_CAN_TYPE_CHANNEL | THINGSET_CAN_PRIO_CHANNEL
+                             | THINGSET_CAN_TARGET_SET(target_addr)
+                             | THINGSET_CAN_SOURCE_SET(ts_can->node_addr);
+
+    ts_can->rx_addr.ext_id = THINGSET_CAN_TYPE_CHANNEL | THINGSET_CAN_PRIO_CHANNEL
+                             | THINGSET_CAN_TARGET_SET(ts_can->node_addr)
+                             | THINGSET_CAN_SOURCE_SET(target_addr);
+
+    int ret = isotp_send(&ts_can->send_ctx, ts_can->dev, tx_buf, tx_len, &ts_can->tx_addr,
+                         &ts_can->rx_addr, NULL, NULL);
+
+    if (ret == ISOTP_N_OK) {
+        return 0;
+    }
+    else {
+        LOG_ERR("Error sending data to addr %d: %d", target_addr, ret);
+        return -EIO;
+    }
+}
+
+int thingset_can_process_inst(struct thingset_can *ts_can, k_timeout_t timeout)
+{
+    struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
+    uint8_t external_addr;
+    int tx_len, rx_len;
+    int err;
+
+    rx_len = thingset_can_receive_inst(ts_can, ts_can->rx_buffer, sizeof(ts_can->rx_buffer),
+                                       &external_addr, timeout);
+    if (rx_len == -EAGAIN) {
+        return -EAGAIN;
+    }
+
+    k_sem_take(&sbuf->lock, K_FOREVER);
+
+    if (rx_len > 0) {
+        tx_len = thingset_process_message(&ts, ts_can->rx_buffer, rx_len, sbuf->data, sbuf->size);
+    }
+    else if (rx_len == -ENOMEM) {
+        sbuf->data[0] = THINGSET_ERR_REQUEST_TOO_LARGE;
+        tx_len = 1;
+    }
+    else {
+        sbuf->data[0] = THINGSET_ERR_INTERNAL_SERVER_ERR;
+        tx_len = 1;
+    }
+
+    /*
+     * Below delay gives the requesting side some more time to switch between sending and
+     * receiving mode.
+     *
+     * ToDo: Improve Zephyr ISO-TP implementation to support sending and receiving simultaneously.
+     */
+    k_sleep(K_MSEC(CONFIG_THINGSET_CAN_RESPONSE_DELAY));
+
+    if (tx_len > 0) {
+        err = thingset_can_send_inst(ts_can, sbuf->data, tx_len, external_addr);
+        if (err == -ENODEV) {
+            LOG_ERR("CAN processing stopped because device not ready");
+            k_sem_give(&sbuf->lock);
+            return err;
+        }
+    }
+
+    k_sem_give(&sbuf->lock);
+    return 0;
+}
+#endif /* CONFIG_THINGSET_CAN_USE_ISOTP_FAST */
 
 int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can_dev)
 {
@@ -420,7 +557,9 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
         sys_slist_init(&rx_buf_lookup[i]);
     }
 #endif
+#ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
     k_sem_init(&ts_can->request_response.sem, 1, 1);
+#endif
     k_work_init_delayable(&ts_can->reporting_work, thingset_can_report_tx_handler);
     k_work_init_delayable(&ts_can->addr_claim_work, thingset_can_addr_claim_tx_handler);
 
@@ -498,6 +637,16 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
     thingset_storage_save_queued();
 #endif
 
+#ifndef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
+    ts_can->rx_addr.ide = 1;
+    ts_can->rx_addr.use_ext_addr = 0;   /* Normal ISO-TP addressing (using only CAN ID) */
+    ts_can->rx_addr.use_fixed_addr = 1; /* enable SAE J1939 compatible addressing */
+
+    ts_can->tx_addr.ide = 1;
+    ts_can->tx_addr.use_ext_addr = 0;
+    ts_can->tx_addr.use_fixed_addr = 1;
+#endif
+
     struct can_filter addr_discovery_filter = {
         .id = THINGSET_CAN_TYPE_NETWORK | THINGSET_CAN_SOURCE_SET(THINGSET_CAN_ADDR_ANONYMOUS)
               | THINGSET_CAN_TARGET_SET(ts_can->node_addr),
@@ -511,10 +660,12 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
         return filter_id;
     }
 
+#ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
     isotp_fast_msg_id my_addr = THINGSET_CAN_TYPE_CHANNEL | THINGSET_CAN_PRIO_CHANNEL |
                                 THINGSET_CAN_TARGET_SET(ts_can->node_addr);
     isotp_fast_bind(&ts_can->ctx, can_dev, my_addr, &fc_opts, isotp_fast_recv_callback,
         ts_can, isotp_fast_sent_callback);
+#endif
 
     thingset_sdk_reschedule_work(&ts_can->reporting_work, K_NO_WAIT);
 
@@ -571,6 +722,7 @@ static struct thingset_can ts_can_single = {
 THINGSET_ADD_ITEM_UINT8(TS_ID_NET, TS_ID_NET_CAN_NODE_ADDR, "pCANNodeAddr",
                         &ts_can_single.node_addr, THINGSET_ANY_RW, TS_SUBSET_NVM);
 
+#ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
 int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint8_t target_addr,
                       thingset_can_response_callback_t rsp_callback,
                       void *callback_arg, k_timeout_t timeout)
@@ -578,6 +730,12 @@ int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint8_t target_addr,
     return thingset_can_send_inst(&ts_can_single, tx_buf, tx_len, target_addr,
                                   rsp_callback, callback_arg, timeout);
 }
+#else
+int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint8_t target_addr)
+{
+    return thingset_can_send_inst(&ts_can_single, tx_buf, tx_len, target_addr);
+}
+#endif /* CONFIG_THINGSET_CAN_USE_ISOTP_FAST */
 
 int thingset_can_set_report_rx_callback(thingset_can_report_rx_callback_t rx_cb)
 {
