@@ -22,15 +22,15 @@ struct isotp_fast_send_ctx
     struct isotp_fast_ctx *ctx;       /**< pointer to bound context */
     isotp_fast_msg_id recipient_addr; /**< CAN ID used on sent message frames */
     struct k_work work;
-    struct k_timer timer;             /**< handles timeouts */
-    struct k_sem sem;                 /**< used to ensure CF frames are sent in order */
-    const uint8_t *data;              /**< source message buffer */
-    uint16_t rem_len : 12;            /**< length of buffer; max len 4095 */
-    enum isotp_tx_state state : 8;    /**< current state of context */
-    void *cb_arg;                     /**< supplied to sent_callback */
+    struct k_timer timer;          /**< handles timeouts */
+    struct k_sem sem;              /**< used to ensure CF frames are sent in order */
+    const uint8_t *data;           /**< source message buffer */
+    uint16_t rem_len : 12;         /**< length of buffer; max len 4095 */
+    enum isotp_tx_state state : 8; /**< current state of context */
+    void *cb_arg;                  /**< supplied to sent_callback */
     uint8_t wft;
     uint8_t bs;
-    uint8_t sn : 4;                   /**< sequence number; overflows at 4 bits per spec */
+    uint8_t sn : 4; /**< sequence number; overflows at 4 bits per spec */
     uint8_t backlog;
     uint8_t stmin;
 };

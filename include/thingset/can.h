@@ -7,9 +7,9 @@
 #ifndef THINGSET_CAN_H_
 #define THINGSET_CAN_H_
 
+#include "isotp_fast.h"
 #include <zephyr/canbus/isotp.h>
 #include <zephyr/device.h>
-#include "isotp_fast.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -142,10 +142,11 @@ extern "C" {
 typedef void (*thingset_can_report_rx_callback_t)(uint16_t data_id, const uint8_t *value,
                                                   size_t value_len, uint8_t source_addr);
 #ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
-typedef void (*thingset_can_response_callback_t)(uint8_t *data, size_t len, int result, uint8_t sender_id,
-                                                 void* arg);
+typedef void (*thingset_can_response_callback_t)(uint8_t *data, size_t len, int result,
+                                                 uint8_t sender_id, void *arg);
 
-struct thingset_can_request_response {
+struct thingset_can_request_response
+{
     struct k_sem sem;
     struct k_timer timer;
     isotp_fast_msg_id sender_addr;
@@ -287,8 +288,8 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
  * @returns 0 for success or negative errno in case of error
  */
 int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint8_t target_addr,
-                      thingset_can_response_callback_t rsp_callback,
-                      void *callback_arg, k_timeout_t timeout);
+                      thingset_can_response_callback_t rsp_callback, void *callback_arg,
+                      k_timeout_t timeout);
 #else
 /**
  * Send ThingSet message to other node
