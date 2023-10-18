@@ -12,37 +12,44 @@
 #define ISOTP_MSG_FDF BIT(3)
 #endif
 
+/**
+ * Internal send context. Used to manage the transmission of a single
+ * message greater than 1 CAN frame in size.
+ */
 struct isotp_fast_send_ctx
 {
-    sys_snode_t node;
-    struct isotp_fast_ctx *ctx;
-    isotp_fast_msg_id recipient_addr;
+    sys_snode_t node;                 /**< linked list node in @ref isotp_send_ctx_list */
+    struct isotp_fast_ctx *ctx;       /**< pointer to bound context */
+    isotp_fast_msg_id recipient_addr; /**< CAN ID used on sent message frames */
     struct k_work work;
-    struct k_timer timer;
-    struct k_sem sem;
-    /* source message buffer */
-    const uint8_t *data;
-    uint16_t rem_len : 12;
-    enum isotp_tx_state state : 8;
-    void *cb_arg;
+    struct k_timer timer;             /**< handles timeouts */
+    struct k_sem sem;                 /**< used to ensure CF frames are sent in order */
+    const uint8_t *data;              /**< source message buffer */
+    uint16_t rem_len : 12;            /**< length of buffer; max len 4095 */
+    enum isotp_tx_state state : 8;    /**< current state of context */
+    void *cb_arg;                     /**< supplied to sent_callback */
     uint8_t wft;
     uint8_t bs;
-    uint8_t sn : 4;
+    uint8_t sn : 4;                   /**< sequence number; overflows at 4 bits per spec */
     uint8_t backlog;
     uint8_t stmin;
 };
 
+/**
+ * Internal receive context. Used to manage the receipt of a single
+ * message.
+ */
 struct isotp_fast_recv_ctx
 {
-    sys_snode_t node;
-    struct isotp_fast_ctx *ctx;
-    isotp_fast_msg_id sender_addr;
+    sys_snode_t node;              /**< linked list node in @ref isotp_recv_ctx_list */
+    struct isotp_fast_ctx *ctx;    /**< pointer to bound context */
+    isotp_fast_msg_id sender_addr; /**< CAN ID on received frames */
     struct k_work work;
-    struct k_timer timer;
-    struct net_buf *buffer;
-    struct net_buf *frag;
-    uint16_t rem_len : 12;
-    enum isotp_rx_state state : 8;
+    struct k_timer timer;          /**< handles timeouts */
+    struct net_buf *buffer;        /**< head node of buffer */
+    struct net_buf *frag;          /**< current fragment */
+    uint16_t rem_len : 12;         /**< remaining length of incoming message */
+    enum isotp_rx_state state : 8; /**< current state of context */
     uint8_t wft;
     uint8_t bs;
     uint8_t sn_expected : 4;

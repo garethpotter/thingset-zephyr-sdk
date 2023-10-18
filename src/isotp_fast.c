@@ -14,17 +14,29 @@ static void receive_work_handler(struct k_work *item);
 static void receive_timeout_handler(struct k_timer *timer);
 static void receive_state_machine(struct isotp_fast_recv_ctx *rctx);
 
+/* Memory slab to hold send contexts */
 K_MEM_SLAB_DEFINE(isotp_send_ctx_slab, sizeof(struct isotp_fast_send_ctx),
                   CONFIG_ISOTP_TX_BUF_COUNT, 4);
 
+/* Memory slab to hold receive contexts */
 K_MEM_SLAB_DEFINE(isotp_recv_ctx_slab, sizeof(struct isotp_fast_recv_ctx),
                   CONFIG_ISOTP_RX_BUF_COUNT, 4);
 
+/**
+ * Pool of buffers for incoming messages. The current implementation
+ * sizes these to match the size of a CAN frame less the 1 header byte
+ * that ISO-TP consumes. The important configuration options determining
+ * the size of the buffer are therefore ISOTP_RX_BUF_COUNT (i.e. broad
+ * number of buffers) and ISOTP_RX_MAX_PACKET_COUNT (i.e. how big a
+ * message does one anticipate receiving).
+ */
 NET_BUF_POOL_DEFINE(isotp_rx_pool, CONFIG_ISOTP_RX_BUF_COUNT *
                     CONFIG_ISOTP_RX_MAX_PACKET_COUNT, CAN_MAX_DLEN - 1,
                     sizeof(struct isotp_fast_recv_ctx *), NULL);
 
+/* list of currently in-flight send contexts */
 static sys_slist_t isotp_send_ctx_list;
+/* list of currently in-flight receive contexts */
 static sys_slist_t isotp_recv_ctx_list;
 
 static int get_send_ctx(struct isotp_fast_ctx *ctx,
@@ -149,6 +161,7 @@ static inline uint32_t receive_get_ff_length(uint8_t *data)
 	len = ((pci & ISOTP_PCI_FF_DL_UPPER_MASK) << 8) | data[1];
 
 	/* Jumbo packet (32 bit length)*/
+    /* TODO: this probably isn't supported at the moment, given that max length is 4095 */
 	if (!len) {
 		len = UNALIGNED_GET((uint32_t *)data);
         len = sys_be32_to_cpu(len);
@@ -734,8 +747,7 @@ int isotp_fast_bind(struct isotp_fast_ctx *ctx, const struct device *can_dev,
                     const struct isotp_fast_opts *opts,
                     isotp_fast_recv_callback_t recv_callback,
                     void *recv_cb_arg,
-                    isotp_fast_send_callback_t sent_callback,
-                    k_timeout_t timeout)
+                    isotp_fast_send_callback_t sent_callback)
 {
     sys_slist_init(&isotp_send_ctx_list);
     sys_slist_init(&isotp_recv_ctx_list);
@@ -761,6 +773,8 @@ int isotp_fast_unbind(struct isotp_fast_ctx *ctx)
     if (ctx->filter_id >= 0 && ctx->can_dev) {
         can_remove_rx_filter(ctx->can_dev, ctx->filter_id);
     }
+
+    // TODO: what if messages are in flight? Need to clean up.
 
     return ISOTP_N_OK;
 }
