@@ -1,4 +1,6 @@
 /*
+ * Copyright (c) 2019 Alexander Wachter
+ * Copyright (c) 2023 Enphase Energy
  * Copyright (c) 2023 Brill Power
  *
  * SPDX-License-Identifier: Apache-2.0
