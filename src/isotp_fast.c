@@ -29,11 +29,12 @@ K_MEM_SLAB_DEFINE(isotp_recv_ctx_slab, sizeof(struct isotp_fast_recv_ctx),
  * sizes these to match the size of a CAN frame less the 1 header byte
  * that ISO-TP consumes. The important configuration options determining
  * the size of the buffer are therefore ISOTP_RX_BUF_COUNT (i.e. broad
- * number of buffers) and ISOTP_RX_MAX_PACKET_COUNT (i.e. how big a
+ * number of buffers) and ISOTP_FAST_RX_MAX_PACKET_COUNT (i.e. how big a
  * message does one anticipate receiving).
  */
-NET_BUF_POOL_DEFINE(isotp_rx_pool, CONFIG_ISOTP_RX_BUF_COUNT *CONFIG_ISOTP_RX_MAX_PACKET_COUNT,
-                    CAN_MAX_DLEN - 1, sizeof(struct isotp_fast_recv_ctx *), NULL);
+NET_BUF_POOL_DEFINE(isotp_rx_pool, CONFIG_ISOTP_RX_BUF_COUNT *
+                    CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT, CAN_MAX_DLEN - 1,
+                    sizeof(struct isotp_fast_recv_ctx *), NULL);
 
 /* list of currently in-flight send contexts */
 static sys_slist_t isotp_send_ctx_list;

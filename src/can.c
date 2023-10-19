@@ -48,7 +48,7 @@ static const struct can_filter addr_claim_filter = {
     .flags = CAN_FILTER_DATA | CAN_FILTER_IDE,
 };
 
-#ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
+#ifdef CONFIG_ISOTP_FAST
 typedef struct isotp_fast_opts isotp_opts;
 #else
 typedef struct isotp_fc_opts isotp_opts;
@@ -307,7 +307,7 @@ static void thingset_can_report_tx_handler(struct k_work *work)
     thingset_sdk_reschedule_work(dwork, K_TIMEOUT_ABS_MS(ts_can->next_pub_time));
 }
 
-#ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
+#ifdef CONFIG_ISOTP_FAST
 void thingset_can_reset_request_response(struct thingset_can_request_response *rr)
 {
     rr->callback = NULL;
@@ -381,9 +381,9 @@ int thingset_can_receive_inst(struct thingset_can *ts_can, uint8_t *rx_buffer, s
         return -EIO;
     }
 }
-#endif /* CONFIG_THINGSET_CAN_USE_ISOTP_FAST */
+#endif /* CONFIG_ISOTP_FAST */
 
-#ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
+#ifdef CONFIG_ISOTP_FAST
 int thingset_can_send_inst(struct thingset_can *ts_can, uint8_t *tx_buf, size_t tx_len,
                            uint8_t target_addr, thingset_can_response_callback_t rsp_callback,
                            void *callback_arg, k_timeout_t timeout)
@@ -533,7 +533,7 @@ int thingset_can_process_inst(struct thingset_can *ts_can, k_timeout_t timeout)
     k_sem_give(&sbuf->lock);
     return 0;
 }
-#endif /* CONFIG_THINGSET_CAN_USE_ISOTP_FAST */
+#endif /* CONFIG_ISOTP_FAST */
 
 int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can_dev)
 {
@@ -553,7 +553,7 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
         sys_slist_init(&rx_buf_lookup[i]);
     }
 #endif
-#ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
+#ifdef CONFIG_ISOTP_FAST
     k_sem_init(&ts_can->request_response.sem, 1, 1);
 #endif
     k_work_init_delayable(&ts_can->reporting_work, thingset_can_report_tx_handler);
@@ -633,7 +633,7 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
     thingset_storage_save_queued();
 #endif
 
-#ifndef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
+#ifndef CONFIG_ISOTP_FAST
     ts_can->rx_addr.ide = 1;
     ts_can->rx_addr.use_ext_addr = 0;   /* Normal ISO-TP addressing (using only CAN ID) */
     ts_can->rx_addr.use_fixed_addr = 1; /* enable SAE J1939 compatible addressing */
@@ -656,7 +656,7 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
         return filter_id;
     }
 
-#ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
+#ifdef CONFIG_ISOTP_FAST
     isotp_fast_msg_id my_addr = THINGSET_CAN_TYPE_CHANNEL | THINGSET_CAN_PRIO_CHANNEL
                                 | THINGSET_CAN_TARGET_SET(ts_can->node_addr);
     isotp_fast_bind(&ts_can->ctx, can_dev, my_addr, &fc_opts, isotp_fast_recv_callback, ts_can,
@@ -718,7 +718,7 @@ static struct thingset_can ts_can_single = {
 THINGSET_ADD_ITEM_UINT8(TS_ID_NET, TS_ID_NET_CAN_NODE_ADDR, "pCANNodeAddr",
                         &ts_can_single.node_addr, THINGSET_ANY_RW, TS_SUBSET_NVM);
 
-#ifdef CONFIG_THINGSET_CAN_USE_ISOTP_FAST
+#ifdef CONFIG_ISOTP_FAST
 int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint8_t target_addr,
                       thingset_can_response_callback_t rsp_callback, void *callback_arg,
                       k_timeout_t timeout)
@@ -731,7 +731,7 @@ int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint8_t target_addr)
 {
     return thingset_can_send_inst(&ts_can_single, tx_buf, tx_len, target_addr);
 }
-#endif /* CONFIG_THINGSET_CAN_USE_ISOTP_FAST */
+#endif /* CONFIG_ISOTP_FAST */
 
 int thingset_can_set_report_rx_callback(thingset_can_report_rx_callback_t rx_cb)
 {
