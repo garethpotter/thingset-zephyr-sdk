@@ -12,4 +12,10 @@ config ISOTP_FAST_RX_MAX_PACKET_COUNT
   help
     Max number of packets expected in a single ISO-TP message.
 
+config ISOTP_FAST_PER_FRAME_DISPATCH
+  bool "Per-frame dispatch"
+  default false
+  help
+    Whether to invoke the receive callback on receipt of every frame
+
 endif

@@ -34,7 +34,7 @@ K_MEM_SLAB_DEFINE(isotp_recv_ctx_slab, sizeof(struct isotp_fast_recv_ctx),
  */
 NET_BUF_POOL_DEFINE(isotp_rx_pool, CONFIG_ISOTP_RX_BUF_COUNT *
                     CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT, CAN_MAX_DLEN - 1,
-                    sizeof(struct isotp_fast_recv_ctx *), NULL);
+                    sizeof(int), NULL);
 
 /* list of currently in-flight send contexts */
 static sys_slist_t isotp_send_ctx_list;
@@ -93,7 +93,6 @@ static int get_recv_ctx(struct isotp_fast_ctx *ctx, isotp_fast_msg_id sender_add
 {
     isotp_fast_node_id sender_id = isotp_fast_get_addr_sender(sender_addr);
     struct isotp_fast_recv_ctx *context;
-    struct isotp_fast_recv_ctx **p_ctx;
 
     SYS_SLIST_FOR_EACH_CONTAINER(&isotp_recv_ctx_list, context, node)
     {
@@ -106,9 +105,9 @@ static int get_recv_ctx(struct isotp_fast_ctx *ctx, isotp_fast_msg_id sender_add
                 free_recv_ctx(rctx);
                 return ISOTP_NO_NET_BUF_LEFT;
             }
-            p_ctx = net_buf_user_data(context->buffer);
-            *p_ctx = context;
+#ifndef CONFIG_ISOTP_FAST_PER_FRAME_DISPATCH
             net_buf_frag_add(context->buffer, context->frag);
+#endif
             return 0;
         }
     }
@@ -126,11 +125,13 @@ static int get_recv_ctx(struct isotp_fast_ctx *ctx, isotp_fast_msg_id sender_add
     }
     context->frag = context->buffer;
     *rctx = context;
-    p_ctx = net_buf_user_data(context->buffer);
-    *p_ctx = context;
     context->ctx = ctx;
     context->state = ISOTP_RX_STATE_WAIT_FF_SF;
     context->sender_addr = sender_addr;
+#ifdef CONFIG_ISOTP_FAST_PER_FRAME_DISPATCH
+    k_msgq_init(&context->recv_queue, context->recv_queue_pool, sizeof(struct net_buf *), CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT);
+    LOG_DBG("Queue of length %d created", k_msgq_num_free_get(&context->recv_queue));
+#endif
     k_work_init(&context->work, receive_work_handler);
     k_timer_init(&context->timer, receive_timeout_handler, NULL);
     sys_slist_append(&isotp_recv_ctx_list, &context->node);
@@ -139,14 +140,16 @@ static int get_recv_ctx(struct isotp_fast_ctx *ctx, isotp_fast_msg_id sender_add
     return 0;
 }
 
-static inline void receive_report_error(struct isotp_fast_recv_ctx *rctx, int err)
+static inline void receive_report_error(struct isotp_fast_recv_ctx *rctx, int8_t err)
 {
     rctx->state = ISOTP_RX_STATE_ERR;
+    rctx->error = err;
 }
 
-static void send_report_error(struct isotp_fast_send_ctx *sctx, int16_t err)
+static void send_report_error(struct isotp_fast_send_ctx *sctx, int8_t err)
 {
     sctx->state = ISOTP_TX_ERR;
+    sctx->error = err;
 }
 
 static inline uint32_t receive_get_ff_length(uint8_t *data)
@@ -219,6 +222,15 @@ static void receive_send_fc(struct isotp_fast_recv_ctx *rctx, uint8_t fs)
 
 static void receive_state_machine(struct isotp_fast_recv_ctx *rctx)
 {
+#ifdef CONFIG_ISOTP_FAST_PER_FRAME_DISPATCH
+    struct net_buf *frag;
+    while (k_msgq_get(&rctx->recv_queue, &frag, K_NO_WAIT) == 0) {
+        int *p_rem_len = net_buf_user_data(frag);
+        LOG_DBG("Remaining length %d (%d), enqueued %d", *p_rem_len, rctx->rem_len, k_msgq_num_used_get(&rctx->recv_queue));
+        rctx->ctx->recv_callback(frag, *p_rem_len, rctx->sender_addr, rctx->ctx->recv_cb_arg);
+        net_buf_unref(frag);
+    }
+#endif
     switch (rctx->state) {
         case ISOTP_RX_STATE_PROCESS_SF:
             LOG_DBG("SM process SF of length %d", rctx->rem_len);
@@ -228,8 +240,7 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *rctx)
             break;
 
         case ISOTP_RX_STATE_PROCESS_FF:
-            LOG_DBG("SM process FF. Length: %d", rctx->rem_len);
-            rctx->rem_len -= rctx->frag->len;
+            LOG_DBG("SM process FF. Length: %d", rctx->rem_len + rctx->frag->len);
             if (rctx->ctx->opts->bs == 0
                 && rctx->rem_len > CONFIG_ISOTP_RX_BUF_COUNT * CONFIG_ISOTP_RX_BUF_SIZE)
             {
@@ -283,6 +294,10 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *rctx)
         case ISOTP_RX_STATE_ERR:
             // LOG_DBG("SM ERR state. err nr: %d", ctx->error_nr);
             k_timer_stop(&rctx->timer);
+            if (rctx->ctx->recv_error_callback) {
+                rctx->ctx->recv_error_callback(rctx->error, rctx->sender_addr,
+                                               rctx->ctx->recv_cb_arg);
+            }
 
             // if (ctx->error_nr == ISOTP_N_BUFFER_OVERFLW) {
             //     receive_send_fc(ctx, ISOTP_PCI_FS_OVFLW);
@@ -294,8 +309,10 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *rctx)
             free_recv_ctx(&rctx);
             __fallthrough;
         case ISOTP_RX_STATE_RECYCLE:
+#ifndef CONFIG_ISOTP_FAST_PER_FRAME_DISPATCH
             LOG_DBG("Message complete; dispatching");
             rctx->ctx->recv_callback(rctx->buffer, 0, rctx->sender_addr, rctx->ctx->recv_cb_arg);
+#endif
             rctx->state = ISOTP_RX_STATE_UNBOUND;
             free_recv_ctx(&rctx);
             break;
@@ -349,6 +366,13 @@ static void process_ff_sf(struct isotp_fast_recv_ctx *rctx, struct can_frame *fr
 
     LOG_DBG("Current buffer size %d; adding %d", rctx->buffer->len, payload_len);
     net_buf_add_mem(rctx->frag, &frame->data[index], payload_len);
+    rctx->rem_len -= payload_len;
+#ifdef CONFIG_ISOTP_FAST_PER_FRAME_DISPATCH
+    int *p_rem_len = net_buf_user_data(rctx->frag);
+    *p_rem_len = rctx->rem_len;
+    k_msgq_put(&rctx->recv_queue, &rctx->frag, K_NO_WAIT);
+    LOG_DBG("Enqueued item; remaining length %d, queue size %d", *p_rem_len, k_msgq_num_used_get(&rctx->recv_queue));
+#endif
 }
 
 static void process_cf(struct isotp_fast_recv_ctx *rctx, struct can_frame *frame)
@@ -377,6 +401,12 @@ static void process_cf(struct isotp_fast_recv_ctx *rctx, struct can_frame *frame
     data_len = MIN(rctx->rem_len, frame->dlc - index);
     net_buf_add_mem(rctx->frag, &frame->data[index], data_len);
     rctx->rem_len -= data_len;
+#ifdef CONFIG_ISOTP_FAST_PER_FRAME_DISPATCH
+    int *p_rem_len = net_buf_user_data(rctx->frag);
+    *p_rem_len = rctx->rem_len;
+    k_msgq_put(&rctx->recv_queue, &rctx->frag, K_NO_WAIT); /* what if this fails? */
+    LOG_DBG("Enqueued item; remaining length %d, queue size %d", *p_rem_len, k_msgq_num_used_get(&rctx->recv_queue));
+#endif
     LOG_DBG("Added %d bytes; %d bytes remaining", data_len, rctx->rem_len);
 
     if (rctx->rem_len == 0) {
@@ -739,6 +769,7 @@ static inline void prepare_filter(struct can_filter *filter, isotp_fast_msg_id m
 int isotp_fast_bind(struct isotp_fast_ctx *ctx, const struct device *can_dev,
                     const isotp_fast_msg_id my_addr, const struct isotp_fast_opts *opts,
                     isotp_fast_recv_callback_t recv_callback, void *recv_cb_arg,
+                    isotp_fast_recv_error_callback_t recv_error_callback,
                     isotp_fast_send_callback_t sent_callback)
 {
     sys_slist_init(&isotp_send_ctx_list);
@@ -748,6 +779,7 @@ int isotp_fast_bind(struct isotp_fast_ctx *ctx, const struct device *can_dev,
     ctx->opts = opts;
     ctx->recv_callback = recv_callback;
     ctx->recv_cb_arg = recv_cb_arg;
+    ctx->recv_error_callback = recv_error_callback;
     ctx->sent_callback = sent_callback;
     ctx->my_addr = my_addr;
 

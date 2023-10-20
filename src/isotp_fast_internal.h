@@ -27,6 +27,7 @@ struct isotp_fast_send_ctx
     const uint8_t *data;           /**< source message buffer */
     uint16_t rem_len : 12;         /**< length of buffer; max len 4095 */
     enum isotp_tx_state state : 8; /**< current state of context */
+    int8_t error;
     void *cb_arg;                  /**< supplied to sent_callback */
     uint8_t wft;
     uint8_t bs;
@@ -48,8 +49,13 @@ struct isotp_fast_recv_ctx
     struct k_timer timer;          /**< handles timeouts */
     struct net_buf *buffer;        /**< head node of buffer */
     struct net_buf *frag;          /**< current fragment */
+#ifdef CONFIG_ISOTP_FAST_PER_FRAME_DISPATCH
+    struct k_msgq recv_queue;
+    uint8_t recv_queue_pool[sizeof(struct net_buf *) * CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT * 2];
+#endif
     uint16_t rem_len : 12;         /**< remaining length of incoming message */
     enum isotp_rx_state state : 8; /**< current state of context */
+    int8_t error;
     uint8_t wft;
     uint8_t bs;
     uint8_t sn_expected : 4;

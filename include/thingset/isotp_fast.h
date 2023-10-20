@@ -26,6 +26,17 @@ typedef uint32_t isotp_fast_msg_id;
  */
 typedef void (*isotp_fast_recv_callback_t)(struct net_buf *buffer, int rem_len,
                                            isotp_fast_msg_id sender_addr, void *arg);
+
+/**
+ * Callback invoked when an error occurs during message receiption.
+ * @param error The error code.
+ * @param sender_addr The CAN ID of the sender of the message, if available.
+ * @param arg The value of @ref recv_cb_arg passed to @ref isotp_fast_bind.
+ */
+typedef void (*isotp_fast_recv_error_callback_t)(int8_t error,
+                                                 isotp_fast_msg_id sender_addr,
+                                                 void *arg);
+
 /**
  * Callback invoked when a message has been sent.
  * @param result If non-zero, an error has occurred.
@@ -58,6 +69,8 @@ struct isotp_fast_ctx
     isotp_fast_recv_callback_t recv_callback;
     /* Pointer to user-supplied data to be passed to @ref recv_callback */
     void *recv_cb_arg;
+    /* Callback that is invoked when a receive error occurs */
+    isotp_fast_recv_error_callback_t recv_error_callback;
     /* Callback that is invoked when a message is sent */
     isotp_fast_send_callback_t sent_callback;
     /* CAN ID of this node, used in both transmission and receipt of messages */
@@ -76,6 +89,7 @@ struct isotp_fast_ctx
  * @param opts A pointer to an options structure, @ref isotp_fast_opts
  * @param recv_callback A callback that is invoked when a message is received
  * @param recv_cb_arg A pointer to data to be supplied to @ref recv_callback
+ * @param recv_error_callback A callback that is invoked when an error occurs.
  * @param sent_callback A callback that is invoked when a message is sent
  *
  * @returns 0 on success, otherwise an error code < 0.
@@ -83,6 +97,7 @@ struct isotp_fast_ctx
 int isotp_fast_bind(struct isotp_fast_ctx *ctx, const struct device *can_dev,
                     const isotp_fast_msg_id my_addr, const struct isotp_fast_opts *opts,
                     isotp_fast_recv_callback_t recv_callback, void *recv_cb_arg,
+                    isotp_fast_recv_error_callback_t recv_error_callback,
                     isotp_fast_send_callback_t sent_callback);
 
 /**
