@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019 Alexander Wachter
+ * Copyright (c) 2023 Brill Power
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -27,13 +28,14 @@
 
 const struct device *const can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_canbus));
 
-const struct isotp_fc_opts fc_opts = { .bs = 8, .stmin = 0 };
-const struct isotp_fc_opts fc_opts_single = { .bs = 0, .stmin = 1 };
-const struct isotp_msg_id rx_addr = { .std_id = 0x10, .ide = 0, .use_ext_addr = 0 };
-const struct isotp_msg_id tx_addr = { .std_id = 0x11, .ide = 0, .use_ext_addr = 0 };
+const struct isotp_fast_opts fc_opts = { .bs = 8, .stmin = 0 };
+const struct isotp_fast_opts fc_opts_single = { .bs = 0, .stmin = 1 };
+const struct isotp_fast_msg_id rx_addr = 0x18DA0201;
+const struct isotp_fast_msg_id tx_addr = 0x18DA0102;
+const isotp_fast_node_id rx_node_id = 0x01;
+const isotp_fast_node_id tx_node_id = 0x02;
 
-struct isotp_recv_ctx recv_ctx;
-struct isotp_send_ctx send_ctx;
+struct isotp_fast_ctx ctx;
 uint8_t data_buf[128];
 
 void send_complete_cb(int error_nr, void *arg)
@@ -45,8 +47,7 @@ static void send_sf(const struct device *can_dev)
 {
     int ret;
 
-    ret = isotp_send(&send_ctx, can_dev, random_data, DATA_SIZE_SF, &rx_addr, &tx_addr,
-                     send_complete_cb, NULL);
+    ret = isotp_fast_send(&ctx, random_data, DATA_SIZE_SF, rx_node_id, NULL);
     zassert_equal(ret, 0, "Send returned %d", ret);
 }
 

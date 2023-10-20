@@ -75,6 +75,9 @@ struct isotp_fast_ctx
     isotp_fast_send_callback_t sent_callback;
     /* CAN ID of this node, used in both transmission and receipt of messages */
     isotp_fast_msg_id my_addr;
+#ifdef CONFIG_ISOTP_FAST_BLOCKING_RECEIVE
+    sys_slist_t wait_recv_list;
+#endif
 };
 
 /**
@@ -109,6 +112,11 @@ int isotp_fast_bind(struct isotp_fast_ctx *ctx, const struct device *can_dev,
  * @returns 0 on success.
  */
 int isotp_fast_unbind(struct isotp_fast_ctx *ctx);
+
+#ifdef CONFIG_ISOTP_FAST_BLOCKING_RECEIVE
+int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender,
+                    uint8_t *buf, size_t size, k_timeout_t timeout);
+#endif
 
 /**
  * Send a message to a given recipient. If the message fits within a

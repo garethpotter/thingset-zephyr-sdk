@@ -18,4 +18,12 @@ config ISOTP_FAST_PER_FRAME_DISPATCH
   help
     Whether to invoke the receive callback on receipt of every frame
 
+config ISOTP_FAST_BLOCKING_RECEIVE
+  bool "Blocking receive"
+  default false
+  depends on !ISOTP_FAST_PER_FRAME_DISPATCH
+  help
+    Whether to make blocking receive functionality available
+    to ease migration from the old API.
+
 endif

@@ -78,19 +78,10 @@ const isotp_fast_msg_id tx_addr = 0x18DA0102;
 const isotp_fast_node_id rx_node_id = 0x01;
 const isotp_fast_node_id tx_node_id = 0x02;
 
-struct recv_msg
-{
-    uint8_t data[8];
-    int16_t len;
-    int rem_len;
-};
-
 const struct device *const can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_canbus));
 struct isotp_fast_ctx ctx;
 uint8_t data_buf[128];
 CAN_MSGQ_DEFINE(frame_msgq, 10);
-K_MSGQ_DEFINE(recv_msgq, sizeof(struct recv_msg), DIV_ROUND_UP(DATA_SEND_LENGTH, DATA_SIZE_CF), 2);
-int8_t recv_last_error;
 struct k_sem send_compl_sem;
 
 static void print_hex(const uint8_t *ptr, size_t len)
@@ -102,64 +93,11 @@ static void print_hex(const uint8_t *ptr, size_t len)
 
 static int blocking_recv(uint8_t *buf, size_t size, k_timeout_t timeout)
 {
-    int ret;
-    struct recv_msg msg;
-    int rx_len = 0;
-    while ((ret = k_msgq_get(&recv_msgq, &msg, timeout)) == 0) {
-        if (recv_last_error != 0) {
-            ret = recv_last_error;
-            recv_last_error = 0;
-            return ret;
-        }
-        if (msg.len < 0) {
-            /* an error has occurred */
-            printk("Error %d occurred", msg.len);
-            return msg.len;
-        }
-        int cp_len = MIN(msg.len, size - rx_len);
-        memcpy(buf, &msg.data, cp_len);
-        printk("RECV: ");
-        print_hex(&msg.data[0], msg.len);
-        printk("\n");
-        rx_len += cp_len;
-        buf += cp_len;
-        if (msg.rem_len > (size - rx_len)) {
-            /* recv buffer will probably overflow on next call; hand back to user code */
-            break;
-        }
-        if (msg.rem_len == 0) {
-            /* msg is complete */
-            break;
-        }
-    }
-    if (recv_last_error != 0) {
-        ret = recv_last_error;
-        recv_last_error = 0;
-        return ret;
-    }
-    if (ret == -EAGAIN) {
-        return ISOTP_RECV_TIMEOUT;
-    }
-    return rx_len;
-}
-
-void isotp_fast_recv_handler(struct net_buf *buffer, int rem_len, isotp_fast_msg_id sender_addr,
-                             void *arg)
-{
-    struct recv_msg msg = {
-        .len = buffer->len,
-        .rem_len = rem_len,
+    struct can_filter sender = {
+        .id = 0,
+        .mask = 0,
     };
-    memcpy(&msg.data, buffer->data, MIN(sizeof(msg.data), buffer->len));
-    printk("%d bytes received from %x; remaining: %d\n", msg.len, sender_addr, rem_len);
-    k_msgq_put(&recv_msgq, &msg, K_NO_WAIT);
-}
-
-void isotp_fast_recv_error_handler(int8_t error, isotp_fast_msg_id sender_addr, void *arg)
-{
-    printk("Error %d received\n", error);
-    recv_last_error = error;
-    k_msgq_purge(&recv_msgq);
+    return isotp_fast_recv(&ctx, sender, buf, size, timeout);
 }
 
 void isotp_fast_sent_handler(int result, void *arg)
@@ -289,6 +227,7 @@ static void check_frame_series(struct frame_desired *frames, size_t length, stru
 
         desired++;
     }
+    printk("msgq #: %d\n", k_msgq_num_used_get(msgq));
     ret = k_msgq_get(msgq, &frame, K_MSEC(200));
     zassert_equal(ret, -EAGAIN,
                   "Expected timeout, but received %d; %02x %02x %02x %02x %02x %02x %02x %02x", ret,
@@ -752,7 +691,7 @@ ZTEST(isotp_fast_conformance, test_receiver_fc_errors)
     fc_frame.data[2] = FC_PCI_BYTE_3(fc_opts.stmin);
     fc_frame.length = DATA_SIZE_FC;
 
-    filter_id = add_rx_msgq(tx_addr, CAN_STD_ID_MASK);
+    filter_id = add_rx_msgq(tx_addr, CAN_EXT_ID_MASK);
     zassert_true((filter_id >= 0), "Negative filter number [%d]", filter_id);
 
     /* wrong sequence number */
@@ -848,9 +787,6 @@ void *isotp_fast_conformance_setup(void)
     ret = can_set_mode(can_dev, CAN_MODE_LOOPBACK);
     zassert_equal(ret, 0, "Failed to set loopback mode [%d]", ret);
 
-    ret = can_start(can_dev);
-    zassert_equal(ret, 0, "Failed to start CAN controller [%d]", ret);
-
     k_sem_init(&send_compl_sem, 0, 1);
 
     return NULL;
@@ -858,16 +794,21 @@ void *isotp_fast_conformance_setup(void)
 
 void isotp_fast_conformance_before(void *)
 {
-    isotp_fast_bind(&ctx, can_dev, rx_addr, &fc_opts, isotp_fast_recv_handler, NULL,
-                    isotp_fast_recv_error_handler, isotp_fast_sent_handler);
+    int ret = can_start(can_dev);
+    zassert_equal(ret, 0, "Failed to start CAN controller [%d]", ret);
+
+    k_msgq_purge(&frame_msgq);
+
+    isotp_fast_bind(&ctx, can_dev, rx_addr, &fc_opts, NULL, NULL,
+                    NULL, isotp_fast_sent_handler);
 }
 
 void isotp_fast_conformance_after(void *)
 {
     isotp_fast_unbind(&ctx);
 
-    k_msgq_purge(&recv_msgq);
     k_msgq_purge(&frame_msgq);
+    can_stop(can_dev);
 }
 
 ZTEST_SUITE(isotp_fast_conformance, NULL, isotp_fast_conformance_setup,
