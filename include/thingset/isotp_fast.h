@@ -33,8 +33,7 @@ typedef void (*isotp_fast_recv_callback_t)(struct net_buf *buffer, int rem_len,
  * @param sender_addr The CAN ID of the sender of the message, if available.
  * @param arg The value of @ref recv_cb_arg passed to @ref isotp_fast_bind.
  */
-typedef void (*isotp_fast_recv_error_callback_t)(int8_t error,
-                                                 isotp_fast_msg_id sender_addr,
+typedef void (*isotp_fast_recv_error_callback_t)(int8_t error, isotp_fast_msg_id sender_addr,
                                                  void *arg);
 
 /**

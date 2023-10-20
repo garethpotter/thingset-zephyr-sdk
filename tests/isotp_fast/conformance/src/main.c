@@ -25,7 +25,7 @@
 #define EXT_ADDR              5
 #define FF_PCI_TYPE           1
 #define FF_PCI_BYTE_1(dl)     ((FF_PCI_TYPE << PCI_TYPE_POS) | ((dl) >> 8))
-#define FF_PCI_BYTE_2(dl)     ((dl) & 0xFF)
+#define FF_PCI_BYTE_2(dl)     ((dl)&0xFF)
 #define FC_PCI_TYPE           3
 #define FC_PCI_CTS            0
 #define FC_PCI_WAIT           1

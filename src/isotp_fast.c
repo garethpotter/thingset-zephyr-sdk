@@ -32,9 +32,8 @@ K_MEM_SLAB_DEFINE(isotp_recv_ctx_slab, sizeof(struct isotp_fast_recv_ctx),
  * number of buffers) and ISOTP_FAST_RX_MAX_PACKET_COUNT (i.e. how big a
  * message does one anticipate receiving).
  */
-NET_BUF_POOL_DEFINE(isotp_rx_pool, CONFIG_ISOTP_RX_BUF_COUNT *
-                    CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT, CAN_MAX_DLEN - 1,
-                    sizeof(int), NULL);
+NET_BUF_POOL_DEFINE(isotp_rx_pool, CONFIG_ISOTP_RX_BUF_COUNT *CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT,
+                    CAN_MAX_DLEN - 1, sizeof(int), NULL);
 
 /* list of currently in-flight send contexts */
 static sys_slist_t isotp_send_ctx_list;
@@ -129,7 +128,8 @@ static int get_recv_ctx(struct isotp_fast_ctx *ctx, isotp_fast_msg_id sender_add
     context->state = ISOTP_RX_STATE_WAIT_FF_SF;
     context->sender_addr = sender_addr;
 #ifdef CONFIG_ISOTP_FAST_PER_FRAME_DISPATCH
-    k_msgq_init(&context->recv_queue, context->recv_queue_pool, sizeof(struct net_buf *), CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT);
+    k_msgq_init(&context->recv_queue, context->recv_queue_pool, sizeof(struct net_buf *),
+                CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT);
     LOG_DBG("Queue of length %d created", k_msgq_num_free_get(&context->recv_queue));
 #endif
     k_work_init(&context->work, receive_work_handler);
@@ -226,7 +226,8 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *rctx)
     struct net_buf *frag;
     while (k_msgq_get(&rctx->recv_queue, &frag, K_NO_WAIT) == 0) {
         int *p_rem_len = net_buf_user_data(frag);
-        LOG_DBG("Remaining length %d (%d), enqueued %d", *p_rem_len, rctx->rem_len, k_msgq_num_used_get(&rctx->recv_queue));
+        LOG_DBG("Remaining length %d (%d), enqueued %d", *p_rem_len, rctx->rem_len,
+                k_msgq_num_used_get(&rctx->recv_queue));
         rctx->ctx->recv_callback(frag, *p_rem_len, rctx->sender_addr, rctx->ctx->recv_cb_arg);
         net_buf_unref(frag);
     }
@@ -371,7 +372,8 @@ static void process_ff_sf(struct isotp_fast_recv_ctx *rctx, struct can_frame *fr
     int *p_rem_len = net_buf_user_data(rctx->frag);
     *p_rem_len = rctx->rem_len;
     k_msgq_put(&rctx->recv_queue, &rctx->frag, K_NO_WAIT);
-    LOG_DBG("Enqueued item; remaining length %d, queue size %d", *p_rem_len, k_msgq_num_used_get(&rctx->recv_queue));
+    LOG_DBG("Enqueued item; remaining length %d, queue size %d", *p_rem_len,
+            k_msgq_num_used_get(&rctx->recv_queue));
 #endif
 }
 
@@ -405,7 +407,8 @@ static void process_cf(struct isotp_fast_recv_ctx *rctx, struct can_frame *frame
     int *p_rem_len = net_buf_user_data(rctx->frag);
     *p_rem_len = rctx->rem_len;
     k_msgq_put(&rctx->recv_queue, &rctx->frag, K_NO_WAIT); /* what if this fails? */
-    LOG_DBG("Enqueued item; remaining length %d, queue size %d", *p_rem_len, k_msgq_num_used_get(&rctx->recv_queue));
+    LOG_DBG("Enqueued item; remaining length %d, queue size %d", *p_rem_len,
+            k_msgq_num_used_get(&rctx->recv_queue));
 #endif
     LOG_DBG("Added %d bytes; %d bytes remaining", data_len, rctx->rem_len);
 
