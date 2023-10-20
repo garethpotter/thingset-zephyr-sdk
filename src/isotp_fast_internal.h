@@ -12,6 +12,8 @@
 #define ISOTP_MSG_FDF BIT(3)
 #endif
 
+#define ISOTP_FAST_MAX_LEN 4095
+
 /**
  * Internal send context. Used to manage the transmission of a single
  * message greater than 1 CAN frame in size.

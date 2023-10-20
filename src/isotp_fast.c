@@ -715,8 +715,10 @@ static void send_state_machine(struct isotp_fast_send_ctx *sctx)
 
         case ISOTP_TX_ERR:
             LOG_DBG("SM error");
+            sctx->ctx->sent_callback(sctx->error, sctx->cb_arg);
+            sctx->state = ISOTP_TX_STATE_RESET;
             free_send_ctx(&sctx);
-            __fallthrough;
+            break;
 
             /*
              * We sent this synchronously in isotp_fast_send.
@@ -750,8 +752,8 @@ static void send_timeout_handler(struct k_timer *timer)
     struct isotp_fast_send_ctx *sctx = CONTAINER_OF(timer, struct isotp_fast_send_ctx, timer);
 
     if (sctx->state != ISOTP_TX_SEND_CF) {
-        send_report_error(sctx, ISOTP_N_TIMEOUT_BS);
         LOG_ERR("Timed out waiting for FC frame");
+        send_report_error(sctx, ISOTP_N_TIMEOUT_BS);
     }
 
     k_work_submit(&sctx->work);
@@ -809,7 +811,7 @@ int isotp_fast_send(struct isotp_fast_ctx *ctx, const uint8_t *data, size_t len,
     const isotp_fast_msg_id recipient_addr = (ctx->my_addr & 0xFFFF0000)
                                              | (isotp_fast_get_addr_recipient(ctx->my_addr))
                                              | (their_id << ISOTP_FIXED_ADDR_TA_POS);
-    if (len < (CAN_MAX_DLEN - 1)) {
+    if (len <= (CAN_MAX_DLEN - 1)) {
         struct can_frame frame = {
             .dlc = can_bytes_to_dlc(len + 1),
             .id = recipient_addr,
@@ -823,6 +825,9 @@ int isotp_fast_send(struct isotp_fast_ctx *ctx, const uint8_t *data, size_t len,
         return ISOTP_N_OK;
     }
     else {
+        if (len > ISOTP_FAST_MAX_LEN) {
+            return ISOTP_N_BUFFER_OVERFLW;
+        }
         struct isotp_fast_send_ctx *context;
         int ret = get_send_ctx(ctx, recipient_addr, &context);
         if (ret) {

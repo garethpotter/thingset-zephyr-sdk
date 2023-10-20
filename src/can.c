@@ -450,6 +450,12 @@ void isotp_fast_recv_callback(struct net_buf *buffer, int rem_len, isotp_fast_ms
     }
 }
 
+void isotp_fast_recv_error_callback(int8_t error, isotp_fast_msg_id sender_addr, void *arg)
+{
+    struct thingset_can *ts_can = arg;
+    LOG_ERR("RX error %d", error);
+}
+
 void isotp_fast_sent_callback(int result, void *arg)
 {
     struct thingset_can *ts_can = arg;
@@ -660,7 +666,7 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
     isotp_fast_msg_id my_addr = THINGSET_CAN_TYPE_CHANNEL | THINGSET_CAN_PRIO_CHANNEL
                                 | THINGSET_CAN_TARGET_SET(ts_can->node_addr);
     isotp_fast_bind(&ts_can->ctx, can_dev, my_addr, &fc_opts, isotp_fast_recv_callback, ts_can,
-                    isotp_fast_sent_callback);
+                    isotp_fast_recv_error_callback, isotp_fast_sent_callback);
 #endif
 
     thingset_sdk_reschedule_work(&ts_can->reporting_work, K_NO_WAIT);
