@@ -222,10 +222,12 @@ static void receive_can_tx(const struct device *dev, int error, void *arg)
 
 static void receive_send_fc(struct isotp_fast_recv_ctx *rctx, uint8_t fs)
 {
-    struct can_frame frame = { .flags = CAN_FRAME_IDE,
-                               .id = (rctx->sender_addr & 0xFFFF0000)
-                                     | ((rctx->sender_addr & 0xFF00) >> 8)
-                                     | ((rctx->sender_addr & 0xFF) << 8) };
+    struct can_frame frame = {
+        .flags =
+            CAN_FRAME_IDE | ((rctx->ctx->opts->flags & ISOTP_MSG_FDF) != 0 ? CAN_FRAME_FDF : 0),
+        .id = (rctx->sender_addr & 0xFFFF0000) | ((rctx->sender_addr & 0xFF00) >> 8)
+              | ((rctx->sender_addr & 0xFF) << 8)
+    };
     uint8_t *data = frame.data;
     uint8_t payload_len;
     int ret;
@@ -423,7 +425,7 @@ static void process_ff_sf(struct isotp_fast_recv_ctx *rctx, struct can_frame *fr
             LOG_DBG("Got SF IRQ");
             rctx->rem_len = receive_get_sf_length(frame->data, &index);
             payload_len = MIN(rctx->rem_len, CAN_MAX_DLEN - index);
-            LOG_DBG("SF length %d; ix %d", payload_len, index);
+            LOG_DBG("SF length %d", payload_len);
             if (payload_len > can_dlc_to_bytes(frame->dlc)) {
                 LOG_DBG("SF DL does not fit. Ignore");
                 return;
@@ -703,7 +705,6 @@ static inline int send_ff(struct isotp_fast_send_ctx *sctx)
     sctx->rem_len -= size;
     sctx->data += size;
     frame.dlc = can_bytes_to_dlc(CAN_MAX_DLEN);
-
     ret = can_send(sctx->ctx->can_dev, &frame, K_MSEC(ISOTP_A_TIMEOUT_MS), send_can_tx_callback,
                    sctx);
     return ret;
@@ -727,7 +728,6 @@ static inline int send_cf(struct isotp_fast_send_ctx *sctx)
     sctx->data += len;
 
     frame.dlc = can_bytes_to_dlc(len + index);
-
     ret = can_send(sctx->ctx->can_dev, &frame, K_MSEC(ISOTP_A_TIMEOUT_MS), send_can_tx_callback,
                    sctx);
     if (ret == 0) {
@@ -1017,9 +1017,11 @@ int isotp_fast_send(struct isotp_fast_ctx *ctx, const uint8_t *data, size_t len,
             .id = recipient_addr,
             .flags = CAN_FRAME_IDE | ((ctx->opts->flags & ISOTP_MSG_FDF) != 0 ? CAN_FRAME_FDF : 0),
         };
+        int index = 1;
 #ifdef CONFIG_CAN_FD_MODE
         if (len > 0xF) {
             frame.data[1] = (uint8_t)len;
+            index = 2;
         }
         else {
             frame.data[0] = (uint8_t)len;
@@ -1027,7 +1029,7 @@ int isotp_fast_send(struct isotp_fast_ctx *ctx, const uint8_t *data, size_t len,
 #else
         frame.data[0] = (uint8_t)len;
 #endif
-        memcpy(&frame.data[1], data, len);
+        memcpy(&frame.data[index], data, len);
         int ret = can_send(ctx->can_dev, &frame, K_MSEC(ISOTP_A_TIMEOUT_MS), NULL, NULL);
         ctx->sent_callback(ret, cb_arg);
         return ISOTP_N_OK;

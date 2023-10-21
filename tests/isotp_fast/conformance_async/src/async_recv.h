@@ -29,14 +29,14 @@ static int blocking_recv(uint8_t *buf, size_t size, k_timeout_t timeout)
         }
         if (msg.len < 0) {
             /* an error has occurred */
-            printk("Error %d occurred", msg.len);
+            // printk("Error %d occurred", msg.len);
             return msg.len;
         }
         int cp_len = MIN(msg.len, size - rx_len);
         memcpy(buf, &msg.data, cp_len);
-        printk("RECV: ");
-        print_hex(&msg.data[0], msg.len);
-        printk("\n");
+        // printk("RECV: ");
+        // print_hex(&msg.data[0], msg.len);
+        // printk("\n");
         rx_len += cp_len;
         buf += cp_len;
         if (msg.rem_len > (size - rx_len)) {
@@ -67,13 +67,13 @@ void isotp_fast_recv_handler(struct net_buf *buffer, int rem_len, isotp_fast_msg
         .rem_len = rem_len,
     };
     memcpy(&msg.data, buffer->data, MIN(sizeof(msg.data), buffer->len));
-    printk("%d bytes received from %x; remaining: %d\n", msg.len, sender_addr, rem_len);
+    // printk("%d bytes received from %x; remaining: %d\n", msg.len, sender_addr, rem_len);
     k_msgq_put(&recv_msgq, &msg, K_NO_WAIT);
 }
 
 void isotp_fast_recv_error_handler(int8_t error, isotp_fast_msg_id sender_addr, void *arg)
 {
-    printk("Error %d received\n", error);
+    // printk("Error %d received\n", error);
     recv_last_error = error;
     k_msgq_purge(&recv_msgq);
 }
