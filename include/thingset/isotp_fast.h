@@ -33,8 +33,7 @@ typedef void (*isotp_fast_recv_callback_t)(struct net_buf *buffer, int rem_len,
  * @param sender_addr The CAN ID of the sender of the message, if available.
  * @param arg The value of @ref recv_cb_arg passed to @ref isotp_fast_bind.
  */
-typedef void (*isotp_fast_recv_error_callback_t)(int8_t error,
-                                                 isotp_fast_msg_id sender_addr,
+typedef void (*isotp_fast_recv_error_callback_t)(int8_t error, isotp_fast_msg_id sender_addr,
                                                  void *arg);
 
 /**
@@ -114,8 +113,8 @@ int isotp_fast_bind(struct isotp_fast_ctx *ctx, const struct device *can_dev,
 int isotp_fast_unbind(struct isotp_fast_ctx *ctx);
 
 #ifdef CONFIG_ISOTP_FAST_BLOCKING_RECEIVE
-int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender,
-                    uint8_t *buf, size_t size, k_timeout_t timeout);
+int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender, uint8_t *buf, size_t size,
+                    k_timeout_t timeout);
 #endif
 
 /**
