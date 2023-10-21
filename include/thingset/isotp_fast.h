@@ -135,4 +135,4 @@ int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender, uint8_
  */
 int isotp_fast_send(struct isotp_fast_ctx *ctx, const uint8_t *data, size_t len,
                     const isotp_fast_node_id their_id, void *sent_cb_arg);
-#endif /* THINGSET_CAN_USE_ISOTP_FAST */
+#endif /* CONFIG_ISOTP_FAST */
