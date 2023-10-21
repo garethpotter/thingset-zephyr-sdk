@@ -18,27 +18,28 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *rctx);
 
 /* Memory slab to hold send contexts */
 K_MEM_SLAB_DEFINE(isotp_send_ctx_slab, sizeof(struct isotp_fast_send_ctx),
-                  CONFIG_ISOTP_TX_BUF_COUNT, 4);
+                  CONFIG_ISOTP_FAST_TX_BUF_COUNT, 4);
 
 /* Memory slab to hold receive contexts */
 K_MEM_SLAB_DEFINE(isotp_recv_ctx_slab, sizeof(struct isotp_fast_recv_ctx),
-                  CONFIG_ISOTP_RX_BUF_COUNT, 4);
+                  CONFIG_ISOTP_FAST_RX_BUF_COUNT, 4);
 
 #ifdef CONFIG_ISOTP_FAST_BLOCKING_RECEIVE
 /* Memory slab to hold blocking receive contexts */
 K_MEM_SLAB_DEFINE(isotp_recv_await_ctx_slab, sizeof(struct isotp_fast_recv_await_ctx),
-                  CONFIG_ISOTP_RX_BUF_COUNT, 4);
+                  CONFIG_ISOTP_FAST_RX_BUF_COUNT, 4);
 #endif
 
 /**
  * Pool of buffers for incoming messages. The current implementation
  * sizes these to match the size of a CAN frame less the 1 header byte
  * that ISO-TP consumes. The important configuration options determining
- * the size of the buffer are therefore ISOTP_RX_BUF_COUNT (i.e. broad
- * number of buffers) and ISOTP_FAST_RX_MAX_PACKET_COUNT (i.e. how big a
+ * the size of the buffer are therefore CONFIG_ISOTP_FAST_RX_BUF_COUNT (i.e. broad
+ * number of buffers) and CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT (i.e. how big a
  * message does one anticipate receiving).
  */
-NET_BUF_POOL_DEFINE(isotp_rx_pool, CONFIG_ISOTP_RX_BUF_COUNT *CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT,
+NET_BUF_POOL_DEFINE(isotp_rx_pool,
+                    CONFIG_ISOTP_FAST_RX_BUF_COUNT *CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT,
                     CAN_MAX_DLEN - 1, sizeof(int), NULL);
 
 /* list of currently in-flight send contexts */
@@ -147,7 +148,7 @@ static int get_recv_ctx(struct isotp_fast_ctx *ctx, isotp_fast_msg_id sender_add
     context->error = 0;
 #ifdef ISOTP_FAST_RECEIVE_QUEUE
     k_msgq_init(&context->recv_queue, context->recv_queue_pool, sizeof(struct net_buf *),
-                CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT * 6);
+                CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT);
     LOG_DBG("Queue of length %d created", k_msgq_num_free_get(&context->recv_queue));
 #endif
     k_work_init(&context->work, receive_work_handler);
@@ -293,10 +294,10 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *rctx)
         case ISOTP_RX_STATE_PROCESS_FF:
             LOG_DBG("SM process FF. Length: %d", rctx->rem_len + rctx->frag->len);
             if (rctx->ctx->opts->bs == 0
-                && rctx->rem_len > CONFIG_ISOTP_RX_BUF_COUNT * CONFIG_ISOTP_RX_BUF_SIZE)
+                && rctx->rem_len > CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT * (CAN_MAX_DLEN - 1))
             {
                 LOG_ERR("Pkt length is %d but buffer has only %d bytes", rctx->rem_len,
-                        CONFIG_ISOTP_RX_BUF_COUNT * CONFIG_ISOTP_RX_BUF_SIZE);
+                        CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT * (CAN_MAX_DLEN - 1));
                 receive_report_error(rctx, ISOTP_N_BUFFER_OVERFLW);
                 receive_state_machine(rctx);
                 break;

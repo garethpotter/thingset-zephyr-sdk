@@ -60,7 +60,7 @@ struct isotp_fast_recv_ctx
     struct net_buf *frag;   /**< current fragment */
 #ifdef ISOTP_FAST_RECEIVE_QUEUE
     struct k_msgq recv_queue;
-    uint8_t recv_queue_pool[sizeof(struct net_buf *) * CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT * 6];
+    uint8_t recv_queue_pool[sizeof(struct net_buf *) * CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT];
 #endif
     uint16_t rem_len : 12;         /**< remaining length of incoming message */
     enum isotp_rx_state state : 8; /**< current state of context */

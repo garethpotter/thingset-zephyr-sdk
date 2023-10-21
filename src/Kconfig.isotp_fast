@@ -12,6 +12,18 @@ config ISOTP_FAST_RX_MAX_PACKET_COUNT
   help
     Max number of packets expected in a single ISO-TP message.
 
+config ISOTP_FAST_RX_BUF_COUNT
+  int "Max number of RX buffers"
+  default 4
+  help
+    This broadly implies the max number of simultaneous receptions.
+
+config ISOTP_FAST_TX_BUF_COUNT
+  int "Max number of TX buffers"
+  default 4
+  help
+    This broadly implies the max number of simultaneous transmissions.
+
 config ISOTP_FAST_PER_FRAME_DISPATCH
   bool "Per-frame dispatch"
   default false
