@@ -198,9 +198,9 @@ static void send_frame_series(struct frame_desired *frames, size_t length, uint3
     for (i = 0; i < length; i++) {
         frame.dlc = desired->length;
         memcpy(frame.data, desired->data, desired->length);
-        printk("SENT: ");
-        print_hex(frame.data, desired->length);
-        printk("(%x) \n", frame.id);
+        // printk("SENT: ");
+        // print_hex(frame.data, desired->length);
+        // printk("(%x) \n", frame.id);
         ret = can_send(can_dev, &frame, K_MSEC(500), NULL, NULL);
         zassert_equal(ret, 0, "Sending msg %d failed.", i);
         desired++;
@@ -215,9 +215,9 @@ static void check_frame_series(struct frame_desired *frames, size_t length, stru
 
     for (i = 0; i < length; i++) {
         ret = k_msgq_get(msgq, &frame, K_MSEC(500));
-        printk("RECV: ");
-        print_hex(frame.data, can_dlc_to_bytes(frame.dlc));
-        printk("(%x) \n", frame.id);
+        // printk("RECV: ");
+        // print_hex(frame.data, can_dlc_to_bytes(frame.dlc));
+        // printk("(%x) \n", frame.id);
         zassert_equal(ret, 0, "Timeout waiting for msg nr %d. ret: %d", i, ret);
 
         zassert_equal(frame.dlc, desired->length, "DLC of frame nr %d differ. Desired: %d, Got: %d",
