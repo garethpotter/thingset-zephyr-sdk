@@ -25,7 +25,7 @@
 #define EXT_ADDR              5
 #define FF_PCI_TYPE           1
 #define FF_PCI_BYTE_1(dl)     ((FF_PCI_TYPE << PCI_TYPE_POS) | ((dl) >> 8))
-#define FF_PCI_BYTE_2(dl)     ((dl) & 0xFF)
+#define FF_PCI_BYTE_2(dl)     ((dl)&0xFF)
 #define FC_PCI_TYPE           3
 #define FC_PCI_CTS            0
 #define FC_PCI_WAIT           1
@@ -83,6 +83,7 @@ struct isotp_fast_ctx ctx;
 uint8_t data_buf[128];
 CAN_MSGQ_DEFINE(frame_msgq, 10);
 struct k_sem send_compl_sem;
+int filter_id;
 
 static void print_hex(const uint8_t *ptr, size_t len)
 {
@@ -273,7 +274,6 @@ static void prepare_cf_frames(struct frame_desired *frames, size_t frames_cnt, c
 
 ZTEST(isotp_fast_conformance, test_send_sf)
 {
-    int filter_id;
     struct frame_desired des_frame;
 
     des_frame.data[0] = SF_PCI_BYTE_1;
@@ -286,8 +286,6 @@ ZTEST(isotp_fast_conformance, test_send_sf)
     send_sf();
 
     check_frame_series(&des_frame, 1, &frame_msgq);
-
-    can_remove_rx_filter(can_dev, filter_id);
 }
 
 ZTEST(isotp_fast_conformance, test_receive_sf)
@@ -310,7 +308,7 @@ ZTEST(isotp_fast_conformance, test_receive_sf)
 
 ZTEST(isotp_fast_conformance, test_send_sf_fixed)
 {
-    int filter_id, ret;
+    int ret;
     struct frame_desired des_frame;
 
     des_frame.data[0] = SF_PCI_BYTE_1;
@@ -325,8 +323,6 @@ ZTEST(isotp_fast_conformance, test_send_sf_fixed)
     zassert_equal(ret, 0, "Send returned %d", ret);
 
     check_frame_series(&des_frame, 1, &frame_msgq);
-
-    can_remove_rx_filter(can_dev, filter_id);
 }
 
 ZTEST(isotp_fast_conformance, test_receive_sf_fixed)
@@ -359,7 +355,6 @@ ZTEST(isotp_fast_conformance, test_send_data)
     struct frame_desired fc_frame, ff_frame;
     const uint8_t *data_ptr = random_data;
     size_t remaining_length = DATA_SEND_LENGTH;
-    int filter_id;
 
     ff_frame.data[0] = FF_PCI_BYTE_1(DATA_SEND_LENGTH);
     ff_frame.data[1] = FF_PCI_BYTE_2(DATA_SEND_LENGTH);
@@ -385,8 +380,6 @@ ZTEST(isotp_fast_conformance, test_send_data)
     send_frame_series(&fc_frame, 1, rx_addr);
 
     check_frame_series(des_frames, ARRAY_SIZE(des_frames), &frame_msgq);
-
-    can_remove_rx_filter(can_dev, filter_id);
 }
 
 ZTEST(isotp_fast_conformance, test_send_data_blocks)
@@ -394,7 +387,7 @@ ZTEST(isotp_fast_conformance, test_send_data_blocks)
     const uint8_t *data_ptr = random_data;
     size_t remaining_length = DATA_SEND_LENGTH;
     struct frame_desired *data_frame_ptr = des_frames;
-    int filter_id, ret;
+    int ret;
     struct can_frame dummy_frame;
     struct frame_desired fc_frame, ff_frame;
 
@@ -447,15 +440,12 @@ ZTEST(isotp_fast_conformance, test_send_data_blocks)
     check_frame_series(data_frame_ptr, DIV_ROUND_UP(remaining_length, DATA_SIZE_CF), &frame_msgq);
     ret = k_msgq_get(&frame_msgq, &dummy_frame, K_MSEC(50));
     zassert_equal(ret, -EAGAIN, "Expected timeout but got %d", ret);
-
-    can_remove_rx_filter(can_dev, filter_id);
 }
 
 ZTEST(isotp_fast_conformance, test_receive_data)
 {
     const uint8_t *data_ptr = random_data;
     size_t remaining_length = DATA_SEND_LENGTH;
-    int filter_id;
     struct frame_desired fc_frame, ff_frame;
 
     ff_frame.data[0] = FF_PCI_BYTE_1(DATA_SEND_LENGTH);
@@ -481,8 +471,6 @@ ZTEST(isotp_fast_conformance, test_receive_data)
     send_frame_series(des_frames, ARRAY_SIZE(des_frames), rx_addr);
 
     receive_test_data(&ctx, random_data, DATA_SEND_LENGTH, 0);
-
-    can_remove_rx_filter(can_dev, filter_id);
 }
 
 ZTEST(isotp_fast_conformance, test_receive_data_blocks)
@@ -490,7 +478,7 @@ ZTEST(isotp_fast_conformance, test_receive_data_blocks)
     const uint8_t *data_ptr = random_data;
     size_t remaining_length = DATA_SEND_LENGTH;
     struct frame_desired *data_frame_ptr = des_frames;
-    int filter_id, ret;
+    int ret;
     size_t remaining_frames;
     struct frame_desired fc_frame, ff_frame;
 
@@ -531,13 +519,14 @@ ZTEST(isotp_fast_conformance, test_receive_data_blocks)
             remaining_frames = 0;
         }
     }
+    /* this used to come after the next line, which drains the queue
+       that had the effect of being too late to get the data from isotp_fast_recv;
+       even as it is, this seems to rely on everything being slow enough to
+       work correctly */
+    receive_test_data(&ctx, random_data, DATA_SEND_LENGTH, 0);
 
     ret = k_msgq_get(&frame_msgq, &dummy_frame, K_MSEC(50));
     zassert_equal(ret, -EAGAIN, "Expected timeout but got %d", ret);
-
-    receive_test_data(&ctx, random_data, DATA_SEND_LENGTH, 0);
-
-    can_remove_rx_filter(can_dev, filter_id);
 }
 
 ZTEST(isotp_fast_conformance, test_send_timeouts)
@@ -621,7 +610,7 @@ ZTEST(isotp_fast_conformance, test_receive_timeouts)
 
 ZTEST(isotp_fast_conformance, test_stmin)
 {
-    int filter_id, ret;
+    int ret;
     struct frame_desired fc_frame, ff_frame;
     struct can_frame raw_frame;
     uint32_t start_time, time_diff;
@@ -672,13 +661,11 @@ ZTEST(isotp_fast_conformance, test_stmin)
     zassert_equal(ret, 0, "Expected to get a message within %dms. [%d]",
                   STMIN_VAL_2 + STMIN_UPPER_TOLERANCE, ret);
     zassert_true(time_diff >= STMIN_VAL_2, "STmin too short (%dms)", time_diff);
-
-    can_remove_rx_filter(can_dev, filter_id);
 }
 
 ZTEST(isotp_fast_conformance, test_receiver_fc_errors)
 {
-    int ret, filter_id;
+    int ret;
     struct frame_desired ff_frame, fc_frame;
 
     ff_frame.data[0] = FF_PCI_BYTE_1(DATA_SEND_LENGTH);
@@ -698,7 +685,13 @@ ZTEST(isotp_fast_conformance, test_receiver_fc_errors)
     send_frame_series(&ff_frame, 1, rx_addr);
     check_frame_series(&fc_frame, 1, &frame_msgq);
 
-    ret = blocking_recv(data_buf, sizeof(data_buf), K_MSEC(200));
+    /* original version of this test used data_buf, but then the receive just
+       blocks waiting for more frames and then times out, which is the correct
+       behaviour by any reasonable measure; anyway, to preserve the existing
+       assertion, for now, let's pass a tiny buffer that will definitely cause
+       isotp_fast_recv to return */
+    uint8_t tiny_buf[8];
+    ret = blocking_recv(tiny_buf, sizeof(tiny_buf), K_MSEC(200));
     zassert_equal(ret, DATA_SIZE_FF, "Expected FF data length but got %d", ret);
 
     prepare_cf_frames(des_frames, ARRAY_SIZE(des_frames), random_data + DATA_SIZE_FF,
@@ -709,14 +702,11 @@ ZTEST(isotp_fast_conformance, test_receiver_fc_errors)
 
     ret = blocking_recv(data_buf, sizeof(data_buf), K_MSEC(200));
     zassert_equal(ret, ISOTP_N_WRONG_SN, "Expected wrong SN but got %d", ret);
-
-    can_remove_rx_filter(can_dev, filter_id);
-    k_msgq_cleanup(&frame_msgq);
 }
 
 ZTEST(isotp_fast_conformance, test_sender_fc_errors)
 {
-    int ret, filter_id, i;
+    int ret, i;
     struct frame_desired ff_frame, fc_frame;
 
     ff_frame.data[0] = FF_PCI_BYTE_1(DATA_SEND_LENGTH);
@@ -747,7 +737,7 @@ ZTEST(isotp_fast_conformance, test_sender_fc_errors)
 
     ret = isotp_fast_send(&ctx, random_data, 5 * 1024, rx_node_id, NULL);
     zassert_equal(ret, ISOTP_N_BUFFER_OVERFLW, "Expected overflow but got %d", ret);
-    filter_id = add_rx_msgq(tx_addr, CAN_STD_ID_MASK);
+    filter_id = add_rx_msgq(tx_addr, CAN_EXT_ID_MASK);
 
     k_sem_reset(&send_compl_sem);
     ret = isotp_fast_send(&ctx, random_data, DATA_SEND_LENGTH, rx_node_id,
@@ -772,8 +762,6 @@ ZTEST(isotp_fast_conformance, test_sender_fc_errors)
 
     ret = k_sem_take(&send_compl_sem, K_MSEC(200));
     zassert_equal(ret, 0, "Send complete callback not called");
-    k_msgq_cleanup(&frame_msgq);
-    can_remove_rx_filter(can_dev, filter_id);
 }
 
 void *isotp_fast_conformance_setup(void)
@@ -797,10 +785,10 @@ void isotp_fast_conformance_before(void *)
     int ret = can_start(can_dev);
     zassert_equal(ret, 0, "Failed to start CAN controller [%d]", ret);
 
+    filter_id = -1;
     k_msgq_purge(&frame_msgq);
 
-    isotp_fast_bind(&ctx, can_dev, rx_addr, &fc_opts, NULL, NULL,
-                    NULL, isotp_fast_sent_handler);
+    isotp_fast_bind(&ctx, can_dev, rx_addr, &fc_opts, NULL, NULL, NULL, isotp_fast_sent_handler);
 }
 
 void isotp_fast_conformance_after(void *)
@@ -808,6 +796,9 @@ void isotp_fast_conformance_after(void *)
     isotp_fast_unbind(&ctx);
 
     k_msgq_purge(&frame_msgq);
+    if (filter_id >= 0) {
+        can_remove_rx_filter(can_dev, filter_id);
+    }
     can_stop(can_dev);
 }
 

@@ -38,9 +38,8 @@ K_MEM_SLAB_DEFINE(isotp_recv_await_ctx_slab, sizeof(struct isotp_fast_recv_await
  * number of buffers) and ISOTP_FAST_RX_MAX_PACKET_COUNT (i.e. how big a
  * message does one anticipate receiving).
  */
-NET_BUF_POOL_DEFINE(isotp_rx_pool, CONFIG_ISOTP_RX_BUF_COUNT *
-                    CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT, CAN_MAX_DLEN - 1,
-                    sizeof(int), NULL);
+NET_BUF_POOL_DEFINE(isotp_rx_pool, CONFIG_ISOTP_RX_BUF_COUNT *CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT,
+                    CAN_MAX_DLEN - 1, sizeof(int), NULL);
 
 /* list of currently in-flight send contexts */
 static sys_slist_t isotp_send_ctx_list;
@@ -69,6 +68,7 @@ static int get_send_ctx(struct isotp_fast_ctx *ctx, isotp_fast_msg_id recipient_
     *sctx = context;
     context->ctx = ctx;
     context->recipient_addr = recipient_addr;
+    context->error = 0;
     k_work_init(&context->work, receive_work_handler);
     k_timer_init(&context->timer, receive_timeout_handler, NULL);
     sys_slist_append(&isotp_send_ctx_list, &context->node);
@@ -121,9 +121,9 @@ static int get_recv_ctx(struct isotp_fast_ctx *ctx, isotp_fast_msg_id sender_add
                 free_recv_ctx(rctx);
                 return ISOTP_NO_NET_BUF_LEFT;
             }
-    #ifndef ISOTP_FAST_RECEIVE_QUEUE
+#ifndef ISOTP_FAST_RECEIVE_QUEUE
             net_buf_frag_add(context->buffer, context->frag);
-    #endif
+#endif
             return 0;
         }
     }
@@ -144,8 +144,10 @@ static int get_recv_ctx(struct isotp_fast_ctx *ctx, isotp_fast_msg_id sender_add
     context->ctx = ctx;
     context->state = ISOTP_RX_STATE_WAIT_FF_SF;
     context->sender_addr = sender_addr;
+    context->error = 0;
 #ifdef ISOTP_FAST_RECEIVE_QUEUE
-    k_msgq_init(&context->recv_queue, context->recv_queue_pool, sizeof(struct net_buf *), CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT * 6);
+    k_msgq_init(&context->recv_queue, context->recv_queue_pool, sizeof(struct net_buf *),
+                CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT * 6);
     LOG_DBG("Queue of length %d created", k_msgq_num_free_get(&context->recv_queue));
 #endif
     k_work_init(&context->work, receive_work_handler);
@@ -237,17 +239,23 @@ static void receive_send_fc(struct isotp_fast_recv_ctx *rctx, uint8_t fs)
 }
 
 #ifdef CONFIG_ISOTP_FAST_BLOCKING_RECEIVE
-static void notify_waiting_receiver(struct isotp_fast_recv_ctx *rctx) {
+static void notify_waiting_receiver(struct isotp_fast_recv_ctx *rctx)
+{
     struct isotp_fast_recv_await_ctx *awaiter;
     SYS_SLIST_FOR_EACH_CONTAINER(&rctx->ctx->wait_recv_list, awaiter, node)
     {
-        if ((awaiter->sender.id & awaiter->sender.mask) == (rctx->sender_addr & awaiter->sender.mask)) {
-            LOG_DBG("Matched waiting receiver %x:%x to sender %x", awaiter->sender.id, awaiter->sender.mask, rctx->sender_addr);
+        if ((awaiter->sender.id & awaiter->sender.mask)
+            == (rctx->sender_addr & awaiter->sender.mask)) {
+            LOG_DBG("Matched waiting receiver %x:%x to sender %x", awaiter->sender.id,
+                    awaiter->sender.mask, rctx->sender_addr);
             awaiter->rctx = rctx;
             rctx->pending = true;
             if (k_sem_count_get(&awaiter->sem) == 0) {
                 k_sem_give(&awaiter->sem);
-            } else {
+            }
+            else if (rctx->error) {
+                /* if error state, we might already be waiting on the queue for the next
+                   message, so purge the queue to unblock the waiter so it will see the error */
                 k_msgq_purge(&rctx->recv_queue);
             }
             return;
@@ -264,7 +272,8 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *rctx)
     struct net_buf *frag;
     while (k_msgq_get(&rctx->recv_queue, &frag, K_NO_WAIT) == 0) {
         int *p_rem_len = net_buf_user_data(frag);
-        LOG_DBG("Remaining length %d (%d), enqueued %d", *p_rem_len, rctx->rem_len, k_msgq_num_used_get(&rctx->recv_queue));
+        LOG_DBG("Remaining length %d (%d), enqueued %d", *p_rem_len, rctx->rem_len,
+                k_msgq_num_used_get(&rctx->recv_queue));
         rctx->ctx->recv_callback(frag, *p_rem_len, rctx->sender_addr, rctx->ctx->recv_cb_arg);
         net_buf_unref(frag);
     }
@@ -425,7 +434,8 @@ static void process_ff_sf(struct isotp_fast_recv_ctx *rctx, struct can_frame *fr
     int *p_rem_len = net_buf_user_data(rctx->frag);
     *p_rem_len = rctx->rem_len;
     k_msgq_put(&rctx->recv_queue, &rctx->frag, K_NO_WAIT);
-    LOG_DBG("Enqueued item; remaining length %d, queue size %d", *p_rem_len, k_msgq_num_used_get(&rctx->recv_queue));
+    LOG_DBG("Enqueued item; remaining length %d, queue size %d", *p_rem_len,
+            k_msgq_num_used_get(&rctx->recv_queue));
 #endif
 }
 
@@ -459,7 +469,8 @@ static void process_cf(struct isotp_fast_recv_ctx *rctx, struct can_frame *frame
     int *p_rem_len = net_buf_user_data(rctx->frag);
     *p_rem_len = rctx->rem_len;
     k_msgq_put(&rctx->recv_queue, &rctx->frag, K_NO_WAIT); /* what if this fails? */
-    LOG_DBG("Enqueued item; remaining length %d, queue size %d", *p_rem_len, k_msgq_num_used_get(&rctx->recv_queue));
+    LOG_DBG("Enqueued item; remaining length %d, queue size %d", *p_rem_len,
+            k_msgq_num_used_get(&rctx->recv_queue));
 #endif
     LOG_DBG("Added %d bytes; %d bytes remaining", data_len, rctx->rem_len);
 
@@ -871,7 +882,8 @@ int isotp_fast_unbind(struct isotp_fast_ctx *ctx)
 #ifdef CONFIG_ISOTP_FAST_BLOCKING_RECEIVE
     struct isotp_fast_recv_await_ctx *actx;
     struct isotp_fast_recv_await_ctx *next;
-    SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&ctx->wait_recv_list, actx, next, node) {
+    SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&ctx->wait_recv_list, actx, next, node)
+    {
         free_recv_await_ctx(ctx, &actx);
     }
 #endif
@@ -879,12 +891,14 @@ int isotp_fast_unbind(struct isotp_fast_ctx *ctx)
 }
 
 #ifdef CONFIG_ISOTP_FAST_BLOCKING_RECEIVE
-int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender,
-                    uint8_t *buf, size_t size, k_timeout_t timeout)
+int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender, uint8_t *buf, size_t size,
+                    k_timeout_t timeout)
 {
+    /* first try to find in-flight context */
     bool found = false;
     struct isotp_fast_recv_await_ctx *actx;
-    SYS_SLIST_FOR_EACH_CONTAINER(&ctx->wait_recv_list, actx, node) {
+    SYS_SLIST_FOR_EACH_CONTAINER(&ctx->wait_recv_list, actx, node)
+    {
         if (actx->sender.id == sender.id && actx->sender.mask == sender.mask) {
             found = true;
             break;
@@ -893,6 +907,8 @@ int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender,
 
     int ret;
     if (!found) {
+        /* create a new context */
+        LOG_DBG("Creating new await context matching sender %x:%x", sender.id, sender.mask);
         int err = k_mem_slab_alloc(&isotp_recv_await_ctx_slab, (void **)&actx, K_NO_WAIT);
         if (err != 0) {
             return ISOTP_NO_CTX_LEFT;
@@ -901,11 +917,30 @@ int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender,
         actx->sender = sender;
         k_sem_init(&actx->sem, 0, 1);
         sys_slist_append(&ctx->wait_recv_list, &actx->node);
-        LOG_DBG("Waiting for message matching %x:%x", sender.id, sender.mask);
-        ret = k_sem_take(&actx->sem, timeout);
-        if (ret == -EAGAIN) {
-            free_recv_await_ctx(ctx, &actx);
-            return ISOTP_RECV_TIMEOUT;
+
+        /* try to find matching receive context in case there is already one pending */
+        struct isotp_fast_recv_ctx *rctx;
+        bool wait = true;
+        SYS_SLIST_FOR_EACH_CONTAINER(&isotp_recv_ctx_list, rctx, node)
+        {
+            if ((sender.id & sender.mask) == (rctx->sender_addr & sender.mask) && !rctx->pending) {
+                LOG_DBG("Matched await context %x:%x to sender %x", sender.id, sender.mask,
+                        rctx->sender_addr);
+                actx->rctx = rctx;
+                rctx->pending = true;
+                wait = false;
+                break;
+            }
+        }
+
+        if (wait) {
+            /* completely new, so wait for something to happen */
+            LOG_DBG("Waiting for message matching %x:%x", sender.id, sender.mask);
+            ret = k_sem_take(&actx->sem, timeout);
+            if (ret == -EAGAIN) {
+                free_recv_await_ctx(ctx, &actx);
+                return ISOTP_RECV_TIMEOUT;
+            }
         }
     }
 
@@ -927,7 +962,8 @@ int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender,
             return ret;
         }
         rem_len = *(int *)net_buf_user_data(frag);
-        LOG_DBG("Remaining length %d, enqueued %d", rem_len, k_msgq_num_used_get(&actx->rctx->recv_queue));
+        LOG_DBG("Remaining length %d, enqueued %d", rem_len,
+                k_msgq_num_used_get(&actx->rctx->recv_queue));
         int len = MIN(frag->len, size - pos);
         memcpy(buf, frag->data, len);
         net_buf_unref(frag);
@@ -952,7 +988,7 @@ int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender,
     }
     return pos;
 }
-#endif
+#endif /* CONFIG_ISOTP_FAST_BLOCKING_RECEIVE */
 
 int isotp_fast_send(struct isotp_fast_ctx *ctx, const uint8_t *data, size_t len,
                     const isotp_fast_node_id their_id, void *cb_arg)
