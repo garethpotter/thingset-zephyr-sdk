@@ -27,14 +27,6 @@
  * PCI     Process Control Information
  */
 
-/* This is for future use when we have CAN-FD */
-#ifdef ISOTP_USE_CAN_FD
-/* #define ISOTP_CAN_DL CONFIG_ISOTP_TX_DL* */
-#define ISOTP_CAN_DL 8
-#else
-#define ISOTP_CAN_DL 8
-#endif /*ISOTP_USE_CAN_FD*/
-
 /* Protocol control information*/
 #define ISOTP_PCI_SF 0x00 /* Single frame*/
 #define ISOTP_PCI_FF 0x01 /* First frame */
@@ -66,7 +58,11 @@
 
 #define ISOTP_PCI_SN_MASK 0x0F
 
-#define ISOTP_FF_DL_MIN (ISOTP_CAN_DL)
+#ifdef CONFIG_CAN_FD_MODE
+#define ISOTP_FF_DL_MIN (CANFD_MAX_DLC)
+#else
+#define ISOTP_FF_DL_MIN (CAN_MAX_DLC)
+#endif
 
 #define ISOTP_STMIN_MAX      0xFA
 #define ISOTP_STMIN_MS_MAX   0x7F

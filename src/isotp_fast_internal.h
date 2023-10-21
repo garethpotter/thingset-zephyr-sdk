@@ -8,15 +8,17 @@
 #include <thingset/isotp_fast.h>
 #include <zephyr/sys/slist.h>
 
-#ifndef ISOTP_MSG_FDF
-#define ISOTP_MSG_FDF BIT(3)
-#endif
-
 #ifdef CONFIG_ISOTP_FAST_PER_FRAME_DISPATCH
 #define ISOTP_FAST_RECEIVE_QUEUE
 #endif
 #ifdef CONFIG_ISOTP_FAST_BLOCKING_RECEIVE
 #define ISOTP_FAST_RECEIVE_QUEUE
+#endif
+
+#ifdef CONFIG_CAN_FD_MODE
+#define ISOTP_FAST_SF_LEN_BYTE 2
+#else
+#define ISOTP_FAST_SF_LEN_BYTE 1
 #endif
 
 #define ISOTP_FAST_MAX_LEN 4095

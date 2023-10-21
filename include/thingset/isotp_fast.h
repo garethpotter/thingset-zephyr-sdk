@@ -7,6 +7,10 @@
 #ifdef CONFIG_ISOTP_FAST
 #include <zephyr/canbus/isotp.h>
 
+#ifndef ISOTP_MSG_FDF
+#define ISOTP_MSG_FDF BIT(3)
+#endif
+
 /* Represents a sender or a receiver in an ISO-TP fixed addressing scheme */
 typedef uint8_t isotp_fast_node_id;
 /* ISO-TP message ID, i.e. the CAN ID */

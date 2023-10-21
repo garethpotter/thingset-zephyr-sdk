@@ -7,6 +7,7 @@
  */
 
 #include "isotp_fast_internal.h"
+#include <assert.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/byteorder.h>
 
@@ -92,6 +93,10 @@ static inline void free_recv_ctx(struct isotp_fast_recv_ctx **rctx)
     k_timer_stop(&(*rctx)->timer);
     sys_slist_find_and_remove(&isotp_recv_ctx_list, &(*rctx)->node);
     net_buf_unref((*rctx)->buffer);
+#ifdef ISOTP_FAST_RECEIVE_QUEUE
+    k_msgq_purge(&(*rctx)->recv_queue);
+    k_msgq_cleanup(&(*rctx)->recv_queue);
+#endif
     k_mem_slab_free(&isotp_recv_ctx_slab, (void **)rctx);
 }
 
@@ -188,13 +193,15 @@ static inline uint32_t receive_get_ff_length(uint8_t *data)
     return len;
 }
 
-static inline uint32_t receive_get_sf_length(uint8_t *data)
+static inline uint32_t receive_get_sf_length(uint8_t *data, int *index)
 {
     uint8_t len = data[0] & ISOTP_PCI_SF_DL_MASK;
+    (*index)++;
 
     /* Single frames > 16 bytes (CAN-FD only) */
-    if (IS_ENABLED(ISOTP_USE_CAN_FD) && !len) {
+    if (IS_ENABLED(CONFIG_CAN_FD_MODE) && !len) {
         len = data[1];
+        (*index)++;
     }
 
     return len;
@@ -275,6 +282,9 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *rctx)
         int *p_rem_len = net_buf_user_data(frag);
         LOG_DBG("Remaining length %d (%d), enqueued %d", *p_rem_len, rctx->rem_len,
                 k_msgq_num_used_get(&rctx->recv_queue));
+        if (k_msgq_num_used_get(&rctx->recv_queue) > CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT) {
+            assert(0);
+        }
         rctx->ctx->recv_callback(frag, *p_rem_len, rctx->sender_addr, rctx->ctx->recv_cb_arg);
         net_buf_unref(frag);
     }
@@ -396,7 +406,7 @@ static void process_ff_sf(struct isotp_fast_recv_ctx *rctx, struct can_frame *fr
     switch (frame->data[index] & ISOTP_PCI_TYPE_MASK) {
         case ISOTP_PCI_TYPE_FF:
             LOG_DBG("Got FF IRQ");
-            if (frame->dlc != ISOTP_CAN_DL) {
+            if (frame->dlc != ISOTP_FF_DL_MIN) {
                 LOG_DBG("FF DLC invalid. Ignore");
                 return;
             }
@@ -411,11 +421,10 @@ static void process_ff_sf(struct isotp_fast_recv_ctx *rctx, struct can_frame *fr
 
         case ISOTP_PCI_TYPE_SF:
             LOG_DBG("Got SF IRQ");
-            rctx->rem_len = receive_get_sf_length(frame->data);
-            index++;
+            rctx->rem_len = receive_get_sf_length(frame->data, &index);
             payload_len = MIN(rctx->rem_len, CAN_MAX_DLEN - index);
-            LOG_DBG("SF length %d", payload_len);
-            if (payload_len > frame->dlc) {
+            LOG_DBG("SF length %d; ix %d", payload_len, index);
+            if (payload_len > can_dlc_to_bytes(frame->dlc)) {
                 LOG_DBG("SF DL does not fit. Ignore");
                 return;
             }
@@ -463,7 +472,7 @@ static void process_cf(struct isotp_fast_recv_ctx *rctx, struct can_frame *frame
     }
 
     LOG_DBG("Got CF irq. Appending data");
-    data_len = MIN(rctx->rem_len, frame->dlc - index);
+    data_len = MIN(rctx->rem_len, can_dlc_to_bytes(frame->dlc) - index);
     net_buf_add_mem(rctx->frag, &frame->data[index], data_len);
     rctx->rem_len -= data_len;
 #ifdef ISOTP_FAST_RECEIVE_QUEUE
@@ -544,8 +553,7 @@ static inline void prepare_frame(struct can_frame *frame, struct isotp_fast_ctx 
                                  isotp_fast_msg_id addr)
 {
     frame->id = addr;
-    frame->flags =
-        CAN_FRAME_IDE | 0; //((ctx->opts->flags & ISOTP_MSG_FDF) != 0) ? CAN_FRAME_FDF : 0;
+    frame->flags = CAN_FRAME_IDE | ((ctx->opts->flags & ISOTP_MSG_FDF) != 0 ? CAN_FRAME_FDF : 0);
 }
 
 static k_timeout_t stmin_to_timeout(uint8_t stmin)
@@ -940,8 +948,10 @@ int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender, uint8_
             ret = k_sem_take(&actx->sem, timeout);
             if (ret == -EAGAIN) {
                 free_recv_await_ctx(ctx, &actx);
+                LOG_DBG("Timed out waiting for first message");
                 return ISOTP_RECV_TIMEOUT;
             }
+            LOG_DBG("Matched; processing message");
         }
     }
 
@@ -961,6 +971,9 @@ int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender, uint8_
             ret = actx->rctx->error;
             free_recv_await_ctx(ctx, &actx);
             return ret;
+        }
+        if (pos == 0) {
+            LOG_DBG("New messages received");
         }
         rem_len = *(int *)net_buf_user_data(frag);
         LOG_DBG("Remaining length %d, enqueued %d", rem_len,
@@ -985,6 +998,7 @@ int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender, uint8_
     }
     if (ret == -EAGAIN) {
         free_recv_await_ctx(ctx, &actx);
+        LOG_DBG("Timed out waiting on more packets");
         return ISOTP_RECV_TIMEOUT;
     }
     return pos;
@@ -997,14 +1011,22 @@ int isotp_fast_send(struct isotp_fast_ctx *ctx, const uint8_t *data, size_t len,
     const isotp_fast_msg_id recipient_addr = (ctx->my_addr & 0xFFFF0000)
                                              | (isotp_fast_get_addr_recipient(ctx->my_addr))
                                              | (their_id << ISOTP_FIXED_ADDR_TA_POS);
-    if (len <= (CAN_MAX_DLEN - 1)) {
+    if (len <= (CAN_MAX_DLEN - ISOTP_FAST_SF_LEN_BYTE)) {
         struct can_frame frame = {
-            .dlc = can_bytes_to_dlc(len + 1),
+            .dlc = can_bytes_to_dlc(len + ISOTP_FAST_SF_LEN_BYTE),
             .id = recipient_addr,
-            .flags =
-                CAN_FRAME_IDE | 0 //((ctx->opts->flags & ISOTP_MSG_FDF) != 0) ? CAN_FRAME_FDF : 0,
+            .flags = CAN_FRAME_IDE | ((ctx->opts->flags & ISOTP_MSG_FDF) != 0 ? CAN_FRAME_FDF : 0),
         };
+#ifdef CONFIG_CAN_FD_MODE
+        if (len > 0xF) {
+            frame.data[1] = (uint8_t)len;
+        }
+        else {
+            frame.data[0] = (uint8_t)len;
+        }
+#else
         frame.data[0] = (uint8_t)len;
+#endif
         memcpy(&frame.data[1], data, len);
         int ret = can_send(ctx->can_dev, &frame, K_MSEC(ISOTP_A_TIMEOUT_MS), NULL, NULL);
         ctx->sent_callback(ret, cb_arg);
