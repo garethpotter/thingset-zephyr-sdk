@@ -118,9 +118,9 @@ static void send_frame_series(struct frame_desired *frames, size_t length, uint3
     for (i = 0; i < length; i++) {
         frame.dlc = can_bytes_to_dlc(desired->length);
         memcpy(frame.data, desired->data, desired->length);
-        // printk("SENT: ");
+        // printk("> [%x] [%02d] ", frame.id, desired->length);
         // print_hex(frame.data, desired->length);
-        // printk("(%x) \n", frame.id);
+        // printk("\n");
         ret = can_send(can_dev, &frame, K_MSEC(500), NULL, NULL);
         zassert_equal(ret, 0, "Sending msg %d failed (error %d).", i, ret);
         desired++;

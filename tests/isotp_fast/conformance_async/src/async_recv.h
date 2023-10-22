@@ -34,9 +34,6 @@ static int blocking_recv(uint8_t *buf, size_t size, k_timeout_t timeout)
         }
         int cp_len = MIN(msg.len, size - rx_len);
         memcpy(buf, &msg.data, cp_len);
-        // printk("RECV: ");
-        // print_hex(&msg.data[0], msg.len);
-        // printk("\n");
         rx_len += cp_len;
         buf += cp_len;
         if (msg.rem_len > (size - rx_len)) {
@@ -67,7 +64,9 @@ void isotp_fast_recv_handler(struct net_buf *buffer, int rem_len, isotp_fast_msg
         .rem_len = rem_len,
     };
     memcpy(&msg.data, buffer->data, MIN(sizeof(msg.data), buffer->len));
-    // printk("%d bytes received from %x; remaining: %d\n", msg.len, sender_addr, rem_len);
+    // printk("< [%x] [%02d] ", sender_addr, buffer->len);
+    // print_hex(&msg.data[0], msg.len);
+    // printk("[%d]\n", rem_len);
     k_msgq_put(&recv_msgq, &msg, K_NO_WAIT);
 }
 
