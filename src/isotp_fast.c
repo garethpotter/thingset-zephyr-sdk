@@ -1010,7 +1010,6 @@ int isotp_fast_send(struct isotp_fast_ctx *ctx, const uint8_t *data, size_t len,
                                              | (their_id << ISOTP_FIXED_ADDR_TA_POS);
     if (len <= (CAN_MAX_DLEN - ISOTP_FAST_SF_LEN_BYTE)) {
         struct can_frame frame = {
-            .dlc = can_bytes_to_dlc(len + ISOTP_FAST_SF_LEN_BYTE),
             .id = recipient_addr,
             .flags = CAN_FRAME_IDE | ((ctx->opts->flags & ISOTP_MSG_FDF) != 0 ? CAN_FRAME_FDF : 0),
         };
@@ -1026,6 +1025,7 @@ int isotp_fast_send(struct isotp_fast_ctx *ctx, const uint8_t *data, size_t len,
 #else
         frame.data[0] = (uint8_t)len;
 #endif
+        frame.dlc = can_bytes_to_dlc(len + index);
         memcpy(&frame.data[index], data, len);
         int ret = can_send(ctx->can_dev, &frame, K_MSEC(ISOTP_A_TIMEOUT_MS), NULL, NULL);
         ctx->sent_callback(ret, cb_arg);
