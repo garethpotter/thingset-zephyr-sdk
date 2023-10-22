@@ -56,6 +56,11 @@ typedef struct isotp_fc_opts isotp_opts;
 static const isotp_opts fc_opts = {
     .bs = 8,    /* block size */
     .stmin = 1, /* minimum separation time = 100 ms */
+#ifdef CONFIG_ISOTP_FAST
+#ifdef CONFIG_CAN_FD_MODE
+    .flags = ISOTP_MSG_FDF,
+#endif
+#endif
 };
 
 #ifdef CONFIG_THINGSET_CAN_PACKETIZED_REPORTS_RX
