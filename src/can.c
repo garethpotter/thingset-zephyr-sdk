@@ -586,6 +586,10 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
 
     k_event_init(&ts_can->events);
 
+#ifdef CONFIG_CAN_FD_MODE
+    can_set_mode(ts_can->dev, CAN_MODE_FD);
+#endif
+
     can_start(ts_can->dev);
 
     filter_id =

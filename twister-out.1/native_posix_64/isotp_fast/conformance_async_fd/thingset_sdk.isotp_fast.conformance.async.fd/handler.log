@@ -1,0 +1,83 @@
+[00:00:00.000,000] [0m<inf> can_loopback: Init of can_loopback0 done[0m
+*** Booting Zephyr OS build zephyr-v2.5.0-31748-gb7e659cdd308 ***
+Running TESTSUITE isotp_fast_conformance_async_fd
+===================================================================
+START - test_receive_data
+[00:00:00.000,000] [0m<inf> isotp_fast: Successfully bound to 18da0201:3ffff00[0m
+ PASS - test_receive_data in 0.270 seconds
+===================================================================
+START - test_receive_data_blocks
+[00:00:00.270,000] [0m<inf> isotp_fast: Successfully bound to 18da0201:3ffff00[0m
+ PASS - test_receive_data_blocks in 0.330 seconds
+===================================================================
+START - test_receive_sf
+[00:00:00.600,000] [0m<inf> isotp_fast: Successfully bound to 18da0201:3ffff00[0m
+[00:00:00.600,000] [1;31m<err> isotp_fast: Got unexpected PDU[0m
+ PASS - test_receive_sf in 0.210 seconds
+===================================================================
+START - test_receive_sf_fixed
+[00:00:00.810,000] [0m<inf> isotp_fast: Successfully bound to 18da0201:3ffff00[0m
+ PASS - test_receive_sf_fixed in 0.210 seconds
+===================================================================
+START - test_receive_timeouts
+[00:00:01.020,000] [0m<inf> isotp_fast: Successfully bound to 18da0201:3ffff00[0m
+[00:00:02.020,000] [1;31m<err> isotp_fast: Timeout while waiting for CF[0m
+ PASS - test_receive_timeouts in 1.000 seconds
+===================================================================
+START - test_receiver_fc_errors
+[00:00:02.020,000] [0m<inf> isotp_fast: Successfully bound to 18da0201:3ffff00[0m
+[00:00:02.230,000] [1;31m<err> isotp_fast: Sequence number mismatch[0m
+ PASS - test_receiver_fc_errors in 0.420 seconds
+===================================================================
+START - test_send_data
+[00:00:02.440,000] [0m<inf> isotp_fast: Successfully bound to 18da0201:3ffff00[0m
+ PASS - test_send_data in 0.420 seconds
+===================================================================
+START - test_send_sf
+[00:00:02.860,000] [0m<inf> isotp_fast: Successfully bound to 18da0201:3ffff00[0m
+ PASS - test_send_sf in 0.210 seconds
+===================================================================
+START - test_send_sf_fixed
+[00:00:03.070,000] [0m<inf> isotp_fast: Successfully bound to 18da0201:3ffff00[0m
+ PASS - test_send_sf_fixed in 0.210 seconds
+===================================================================
+START - test_send_timeouts
+[00:00:03.280,000] [0m<inf> isotp_fast: Successfully bound to 18da0201:3ffff00[0m
+[00:00:04.280,000] [1;31m<err> isotp_fast: Timed out waiting for FC frame[0m
+[00:00:05.280,000] [1;31m<err> isotp_fast: Timed out waiting for FC frame[0m
+[00:00:07.090,000] [1;31m<err> isotp_fast: Timed out waiting for FC frame[0m
+ PASS - test_send_timeouts in 3.810 seconds
+===================================================================
+START - test_sender_fc_errors
+[00:00:07.090,000] [0m<inf> isotp_fast: Successfully bound to 18da0201:3ffff00[0m
+[00:00:07.510,000] [1;31m<err> isotp_fast: Got overflow FC frame[0m
+[00:00:07.720,000] [1;33m<wrn> isotp_fast: Got too many wait frames[0m
+ PASS - test_sender_fc_errors in 0.630 seconds
+===================================================================
+START - test_stmin
+[00:00:07.720,000] [0m<inf> isotp_fast: Successfully bound to 18da0201:3ffff00[0m
+ SKIP - test_stmin in 0.000 seconds
+===================================================================
+TESTSUITE isotp_fast_conformance_async_fd succeeded
+
+------ TESTSUITE SUMMARY START ------
+
+SUITE PASS - 100.00% [isotp_fast_conformance_async_fd]: pass = 11, fail = 0, skip = 1, total = 12 duration = 7.720 seconds
+ - PASS - [isotp_fast_conformance_async_fd.test_receive_data] duration = 0.270 seconds
+ - PASS - [isotp_fast_conformance_async_fd.test_receive_data_blocks] duration = 0.330 seconds
+ - PASS - [isotp_fast_conformance_async_fd.test_receive_sf] duration = 0.210 seconds
+ - PASS - [isotp_fast_conformance_async_fd.test_receive_sf_fixed] duration = 0.210 seconds
+ - PASS - [isotp_fast_conformance_async_fd.test_receive_timeouts] duration = 1.000 seconds
+ - PASS - [isotp_fast_conformance_async_fd.test_receiver_fc_errors] duration = 0.420 seconds
+ - PASS - [isotp_fast_conformance_async_fd.test_send_data] duration = 0.420 seconds
+ - PASS - [isotp_fast_conformance_async_fd.test_send_sf] duration = 0.210 seconds
+ - PASS - [isotp_fast_conformance_async_fd.test_send_sf_fixed] duration = 0.210 seconds
+ - PASS - [isotp_fast_conformance_async_fd.test_send_timeouts] duration = 3.810 seconds
+ - PASS - [isotp_fast_conformance_async_fd.test_sender_fc_errors] duration = 0.630 seconds
+ - SKIP - [isotp_fast_conformance_async_fd.test_stmin] duration = 0.000 seconds
+
+------ TESTSUITE SUMMARY END ------
+
+===================================================================
+RunID: c3fd5653ec16d6a50d08e5c2403a9e15
+PROJECT EXECUTION SUCCESSFUL

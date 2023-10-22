@@ -1,0 +1,18 @@
+[00:00:00.000,000] [0m<inf> can_loopback: Init of can_loopback0 done[0m
+*** Booting Zephyr OS build zephyr-v2.5.0-31748-gb7e659cdd308 ***
+[00:00:00.000,000] [0m<inf> thingset_sdk: ThingSet Node ID (EUI-64): 44D06FE77A50AA65[0m
+Running TESTSUITE thingset_isotp_fast
+===================================================================
+[00:00:00.510,000] [0m<inf> thingset_can: Received address claim from node 0x01 with EUI-64 44-d0-6f-e7-7a-50-aa-01[0m
+[00:00:00.510,000] [0m<inf> thingset_can: Using CAN node address 0x01[0m
+[00:00:00.510,000] [0m<inf> isotp_fast: Successfully bound to 18000100:3ffff00[0m
+START - test_receive_report_from_node
+ PASS - test_receive_report_from_node in 0.000 seconds
+===================================================================
+START - test_send_request_to_node
+ PASS - test_send_request_to_node in 0.000 seconds
+===================================================================
+TESTSUITE thingset_isotp_fast succeeded
+===================================================================
+RunID: a7c31171e55f412f1149abe429e85f08
+PROJECT EXECUTION SUCCESSFUL

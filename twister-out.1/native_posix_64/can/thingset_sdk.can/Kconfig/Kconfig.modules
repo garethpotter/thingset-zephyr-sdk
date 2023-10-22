@@ -1,0 +1,48 @@
+menu "ThingSet SDK (/home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git)"
+osource "/home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/Kconfig"
+config ZEPHYR_THINGSET_SDK_MODULE
+	bool
+	default y
+endmenu
+menu "thingset-node-c (/home/gaz/thingset-zephyr-sdk/modules/thingset-node-c)"
+osource "/home/gaz/thingset-zephyr-sdk/modules/thingset-node-c/Kconfig.thingset"
+config ZEPHYR_THINGSET_NODE_C_MODULE
+	bool
+	default y
+endmenu
+menu "hal_espressif (/home/gaz/thingset-zephyr-sdk/modules/hal/espressif)"
+osource "/home/gaz/thingset-zephyr-sdk/modules/hal/espressif/zephyr/Kconfig"
+config ZEPHYR_HAL_ESPRESSIF_MODULE
+	bool
+	default y
+endmenu
+menu "hal_nordic (/home/gaz/thingset-zephyr-sdk/modules/hal/nordic)"
+osource "$(ZEPHYR_HAL_NORDIC_KCONFIG)"
+config ZEPHYR_HAL_NORDIC_MODULE
+	bool
+	default y
+endmenu
+menu "loramac-node (/home/gaz/thingset-zephyr-sdk/modules/lib/loramac-node)"
+osource "$(ZEPHYR_LORAMAC_NODE_KCONFIG)"
+config ZEPHYR_LORAMAC_NODE_MODULE
+	bool
+	default y
+endmenu
+menu "mbedtls (/home/gaz/thingset-zephyr-sdk/modules/crypto/mbedtls)"
+osource "$(ZEPHYR_MBEDTLS_KCONFIG)"
+config ZEPHYR_MBEDTLS_MODULE
+	bool
+	default y
+endmenu
+menu "picolibc (/home/gaz/thingset-zephyr-sdk/modules/lib/picolibc)"
+osource "/home/gaz/thingset-zephyr-sdk/modules/lib/picolibc/zephyr/Kconfig"
+config ZEPHYR_PICOLIBC_MODULE
+	bool
+	default y
+endmenu
+menu "zcbor (/home/gaz/thingset-zephyr-sdk/modules/lib/zcbor)"
+osource "$(ZEPHYR_ZCBOR_KCONFIG)"
+config ZEPHYR_ZCBOR_MODULE
+	bool
+	default y
+endmenu

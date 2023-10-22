@@ -1,0 +1,168 @@
+Loading Zephyr module(s) (Zephyr base): zephyr_default:dts
+-- Application: /home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/tests/isotp_fast/conformance_async
+-- CMake version: 3.22.1
+-- Found Python3: /usr/bin/python3.10 (found suitable exact version "3.10.12") found components: Interpreter 
+-- Cache files will be written to: /home/gaz/.cache/zephyr
+-- Zephyr version: 3.4.0 (/home/gaz/thingset-zephyr-sdk/zephyr)
+-- Found west (found suitable version "1.2.0", minimum required is "0.14.0")
+-- Board: native_posix_64
+-- ZEPHYR_TOOLCHAIN_VARIANT not set, trying to locate Zephyr SDK
+-- Found host-tools: zephyr 0.16.3 (/usr/local/zephyr-sdk)
+-- Found toolchain: host (gcc/ld)
+-- Found Dtc: /usr/local/zephyr-sdk/sysroots/aarch64-pokysdk-linux/usr/bin/dtc (found suitable version "1.6.0", minimum required is "1.4.6") 
+-- Found BOARD.dts: /home/gaz/thingset-zephyr-sdk/zephyr/boards/posix/native_posix/native_posix_64.dts
+-- Generated zephyr.dts: /home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/twister-out/native_posix_64/isotp_fast/conformance_async/thingset_sdk.isotp_fast.conformance.async/zephyr/zephyr.dts
+-- Generated devicetree_generated.h: /home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/twister-out/native_posix_64/isotp_fast/conformance_async/thingset_sdk.isotp_fast.conformance.async/zephyr/include/generated/devicetree_generated.h
+-- Including generated dts.cmake file: /home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/twister-out/native_posix_64/isotp_fast/conformance_async/thingset_sdk.isotp_fast.conformance.async/zephyr/dts.cmake
+Loading Zephyr default modules (Zephyr base).
+-- Application: /home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/tests/isotp_fast/conformance_async
+-- CMake version: 3.22.1
+-- Found Python3: /usr/bin/python3.10 (found suitable exact version "3.10.12") found components: Interpreter 
+-- Cache files will be written to: /home/gaz/.cache/zephyr
+-- Zephyr version: 3.4.0 (/home/gaz/thingset-zephyr-sdk/zephyr)
+-- Found west (found suitable version "1.2.0", minimum required is "0.14.0")
+-- Board: native_posix_64
+-- ZEPHYR_TOOLCHAIN_VARIANT not set, trying to locate Zephyr SDK
+-- Found host-tools: zephyr 0.16.3 (/usr/local/zephyr-sdk)
+-- Found toolchain: host (gcc/ld)
+-- Found Dtc: /usr/local/zephyr-sdk/sysroots/aarch64-pokysdk-linux/usr/bin/dtc (found suitable version "1.6.0", minimum required is "1.4.6") 
+-- Found BOARD.dts: /home/gaz/thingset-zephyr-sdk/zephyr/boards/posix/native_posix/native_posix_64.dts
+-- Generated zephyr.dts: /home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/twister-out/native_posix_64/isotp_fast/conformance_async/thingset_sdk.isotp_fast.conformance.async/zephyr/zephyr.dts
+-- Generated devicetree_generated.h: /home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/twister-out/native_posix_64/isotp_fast/conformance_async/thingset_sdk.isotp_fast.conformance.async/zephyr/include/generated/devicetree_generated.h
+-- Including generated dts.cmake file: /home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/twister-out/native_posix_64/isotp_fast/conformance_async/thingset_sdk.isotp_fast.conformance.async/zephyr/dts.cmake
+Parsing /home/gaz/thingset-zephyr-sdk/zephyr/Kconfig
+Loaded configuration '/home/gaz/thingset-zephyr-sdk/zephyr/boards/posix/native_posix/native_posix_64_defconfig'
+Merged configuration '/home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/tests/isotp_fast/conformance_async/prj.conf'
+Merged configuration '/home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/twister-out/native_posix_64/isotp_fast/conformance_async/thingset_sdk.isotp_fast.conformance.async/zephyr/misc/generated/extra_kconfig_options.conf'
+Configuration saved to '/home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/twister-out/native_posix_64/isotp_fast/conformance_async/thingset_sdk.isotp_fast.conformance.async/zephyr/.config'
+Kconfig header saved to '/home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/twister-out/native_posix_64/isotp_fast/conformance_async/thingset_sdk.isotp_fast.conformance.async/zephyr/include/generated/autoconf.h'
+-- Found GnuLd: /usr/bin/ld.bfd (found version "2.38") 
+-- The C compiler identification is GNU 11.4.0
+-- The CXX compiler identification is GNU 11.4.0
+-- The ASM compiler identification is GNU
+-- Found assembler: /usr/bin/gcc
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/twister-out/native_posix_64/isotp_fast/conformance_async/thingset_sdk.isotp_fast.conformance.async
+[1/118] Preparing syscall dependency handling
+
+[2/118] Generating certs/isrgrootx1.der.inc
+[3/118] Generating misc/generated/syscalls_subdirs.trigger
+[4/118] Generating misc/generated/syscalls.json, misc/generated/struct_tags.json
+[5/118] Generating include/generated/version.h
+-- Zephyr version: 3.4.0 (/home/gaz/thingset-zephyr-sdk/zephyr), build: zephyr-v2.5.0-31748-gb7e659cdd308
+[6/118] Generating include/generated/syscall_dispatch.c, include/generated/syscall_list.h
+[7/118] Generating include/generated/kobj-types-enum.h, include/generated/otype-to-str.h, include/generated/otype-to-size.h
+[8/118] Generating include/generated/driver-validation.h
+[9/118] Building C object zephyr/CMakeFiles/offsets.dir/arch/posix/core/offsets/offsets.c.obj
+[10/118] Generating include/generated/offsets.h
+[11/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/cbprintf_packaged.c.obj
+[12/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/dec.c.obj
+[13/118] Building C object CMakeFiles/app.dir/home/gaz/thingset-zephyr-sdk/thingset-zephyr-sdk.git/src/isotp_fast.c.obj
+[14/118] Building C object CMakeFiles/app.dir/src/main.c.obj
+[15/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/hex.c.obj
+[16/118] Linking C static library app/libapp.a
+[17/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/fdtable.c.obj
+[18/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/printk.c.obj
+[19/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/sem.c.obj
+[20/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/thread_entry.c.obj
+[21/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/timeutil.c.obj
+[22/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/rb.c.obj
+[23/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/heap-validate.c.obj
+[24/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/heap.c.obj
+[25/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/bitarray.c.obj
+[26/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/multi_heap.c.obj
+[27/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/crc32c_sw.c.obj
+[28/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/crc8_sw.c.obj
+[29/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/crc32_sw.c.obj
+[30/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/crc7_sw.c.obj
+[31/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/crc16_sw.c.obj
+[32/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/cbprintf.c.obj
+[33/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/assert.c.obj
+[34/118] Building C object zephyr/CMakeFiles/zephyr.dir/misc/generated/configs.c.obj
+[35/118] Building C object zephyr/CMakeFiles/zephyr.dir/lib/os/cbprintf_complete.c.obj
+[36/118] Building C object zephyr/CMakeFiles/zephyr.dir/subsys/logging/log_mgmt.c.obj
+[37/118] Building C object zephyr/CMakeFiles/zephyr.dir/subsys/logging/log_core.c.obj
+[38/118] Building C object zephyr/CMakeFiles/zephyr.dir/subsys/logging/log_cache.c.obj
+[39/118] Building C object zephyr/CMakeFiles/zephyr.dir/subsys/logging/backends/log_backend_native_posix.c.obj
+[40/118] Building C object zephyr/CMakeFiles/zephyr.dir/subsys/logging/log_output.c.obj
+[41/118] Building C object zephyr/CMakeFiles/zephyr.dir/subsys/tracing/tracing_none.c.obj
+[42/118] Building C object zephyr/CMakeFiles/zephyr.dir/subsys/logging/log_msg.c.obj
+[43/118] Building C object zephyr/CMakeFiles/zephyr.dir/subsys/net/lib/utils/addr_utils.c.obj
+[44/118] Generating linker_zephyr_pre1.cmd
+[45/118] Generating linker_zephyr_pre0.cmd
+[46/118] Linking C static library zephyr/libzephyr.a
+[47/118] Building C object zephyr/arch/arch/posix/core/CMakeFiles/arch__posix__core.dir/irq.c.obj
+[48/118] Building C object zephyr/arch/arch/posix/core/CMakeFiles/arch__posix__core.dir/fatal.c.obj
+[49/118] Building C object zephyr/arch/arch/posix/core/CMakeFiles/arch__posix__core.dir/cpuhalt.c.obj
+[50/118] Building C object zephyr/arch/arch/posix/core/CMakeFiles/arch__posix__core.dir/posix_core.c.obj
+[51/118] Building C object zephyr/arch/arch/posix/core/CMakeFiles/arch__posix__core.dir/thread.c.obj
+[52/118] Building C object zephyr/arch/arch/posix/core/CMakeFiles/arch__posix__core.dir/swap.c.obj
+[53/118] Building C object zephyr/CMakeFiles/zephyr_pre0.dir/misc/empty_file.c.obj
+[54/118] Linking C static library zephyr/arch/arch/posix/core/libarch__posix__core.a
+[55/118] Building C object zephyr/soc/posix/inf_clock/CMakeFiles/soc__posix__inf_clock.dir/soc.c.obj
+[56/118] Linking C static library zephyr/soc/posix/inf_clock/libsoc__posix__inf_clock.a
+[57/118] Building C object zephyr/boards/posix/native_posix/CMakeFiles/boards__posix__native_posix.dir/timer_model.c.obj
+[58/118] Building C object zephyr/boards/posix/native_posix/CMakeFiles/boards__posix__native_posix.dir/hw_models_top.c.obj
+[59/118] Building C object zephyr/boards/posix/native_posix/CMakeFiles/boards__posix__native_posix.dir/native_rtc.c.obj
+[60/118] Building C object zephyr/boards/posix/native_posix/CMakeFiles/boards__posix__native_posix.dir/irq_handler.c.obj
+[61/118] Building C object zephyr/boards/posix/native_posix/CMakeFiles/boards__posix__native_posix.dir/irq_ctrl.c.obj
+[62/118] Building C object zephyr/boards/posix/native_posix/CMakeFiles/boards__posix__native_posix.dir/main.c.obj
+[63/118] Building C object zephyr/boards/posix/native_posix/CMakeFiles/boards__posix__native_posix.dir/tracing.c.obj
+[64/118] Building C object zephyr/boards/posix/native_posix/CMakeFiles/boards__posix__native_posix.dir/cmdline.c.obj
+[65/118] Building C object zephyr/boards/posix/native_posix/CMakeFiles/boards__posix__native_posix.dir/cmdline_common.c.obj
+[66/118] Building C object zephyr/boards/posix/native_posix/CMakeFiles/boards__posix__native_posix.dir/cpu_wait.c.obj
+[67/118] Building C object zephyr/boards/posix/native_posix/CMakeFiles/boards__posix__native_posix.dir/hw_counter.c.obj
+[68/118] Linking C static library zephyr/boards/posix/native_posix/libboards__posix__native_posix.a
+[69/118] Building C object zephyr/subsys/testsuite/ztest/CMakeFiles/subsys__testsuite__ztest.dir/src/ztest_error_hook.c.obj
+[70/118] Building C object zephyr/subsys/testsuite/ztest/CMakeFiles/subsys__testsuite__ztest.dir/src/ztest_rules.c.obj
+[71/118] Building C object zephyr/subsys/testsuite/ztest/CMakeFiles/subsys__testsuite__ztest.dir/src/ztest_new.c.obj
+[72/118] Building C object zephyr/subsys/canbus/isotp/CMakeFiles/subsys__canbus__isotp.dir/isotp.c.obj
+[73/118] Linking C static library zephyr/subsys/canbus/isotp/libsubsys__canbus__isotp.a
+[74/118] Building C object zephyr/subsys/testsuite/ztest/CMakeFiles/subsys__testsuite__ztest.dir/src/ztest_posix.c.obj
+[75/118] Linking C static library zephyr/subsys/testsuite/ztest/libsubsys__testsuite__ztest.a
+[76/118] Building C object zephyr/subsys/net/CMakeFiles/subsys__net.dir/buf.c.obj
+[77/118] Building C object zephyr/subsys/net/CMakeFiles/subsys__net.dir/buf_simple.c.obj
+[78/118] Linking C static library zephyr/subsys/net/libsubsys__net.a
+[79/118] Building C object zephyr/drivers/can/CMakeFiles/drivers__can.dir/can_common.c.obj
+[80/118] Building C object zephyr/drivers/console/CMakeFiles/drivers__console.dir/posix_arch_console.c.obj
+[81/118] Building C object zephyr/drivers/can/CMakeFiles/drivers__can.dir/can_loopback.c.obj
+[82/118] Linking C static library zephyr/drivers/console/libdrivers__console.a
+[83/118] Building C object zephyr/drivers/timer/CMakeFiles/drivers__timer.dir/sys_clock_init.c.obj
+[84/118] Linking C static library zephyr/drivers/can/libdrivers__can.a
+[85/118] Building C object zephyr/drivers/timer/CMakeFiles/drivers__timer.dir/native_posix_timer.c.obj
+[86/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/main_weak.c.obj
+[87/118] Linking C static library zephyr/drivers/timer/libdrivers__timer.a
+[88/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/device.c.obj
+[89/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/banner.c.obj
+[90/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/errno.c.obj
+[91/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/fatal.c.obj
+[92/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/init.c.obj
+[93/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/kheap.c.obj
+[94/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/mem_slab.c.obj
+[95/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/version.c.obj
+[96/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/thread.c.obj
+[97/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/idle.c.obj
+[98/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/mailbox.c.obj
+[99/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/mutex.c.obj
+[100/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/msg_q.c.obj
+[101/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/sem.c.obj
+[102/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/queue.c.obj
+[103/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/stack.c.obj
+[104/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/system_work_q.c.obj
+[105/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/condvar.c.obj
+[106/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/work.c.obj
+[107/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/timeout.c.obj
+[108/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/timer.c.obj
+[109/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/sched.c.obj
+[110/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/events.c.obj
+[111/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/mempool.c.obj
+[112/118] Building C object zephyr/kernel/CMakeFiles/kernel.dir/poll.c.obj
+[113/118] Linking C static library zephyr/kernel/libkernel.a
+[114/118] Linking C executable zephyr/zephyr_pre0.elf
+
+[115/118] Generating dev_handles.c
+[116/118] Building C object zephyr/CMakeFiles/zephyr_pre1.dir/misc/empty_file.c.obj
+[117/118] Building C object zephyr/CMakeFiles/zephyr_pre1.dir/dev_handles.c.obj
+[118/118] Linking C executable zephyr/zephyr.elf
+
