@@ -284,9 +284,6 @@ static void receive_state_machine(struct isotp_fast_recv_ctx *rctx)
         int *p_rem_len = net_buf_user_data(frag);
         LOG_DBG("Remaining length %d (%d), enqueued %d", *p_rem_len, rctx->rem_len,
                 k_msgq_num_used_get(&rctx->recv_queue));
-        if (k_msgq_num_used_get(&rctx->recv_queue) > CONFIG_ISOTP_FAST_RX_MAX_PACKET_COUNT) {
-            assert(0);
-        }
         rctx->ctx->recv_callback(frag, *p_rem_len, rctx->sender_addr, rctx->ctx->recv_cb_arg);
         net_buf_unref(frag);
     }
