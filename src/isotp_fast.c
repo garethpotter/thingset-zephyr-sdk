@@ -1013,7 +1013,7 @@ int isotp_fast_send(struct isotp_fast_ctx *ctx, const uint8_t *data, size_t len,
         prepare_frame(&frame, ctx, recipient_addr);
         int index = 1;
 #ifdef CONFIG_CAN_FD_MODE
-        if (len > 0xF) {
+        if (len > ISOTP_4BIT_SF_MAX_CAN_DL - 1) {
             frame.data[0] = ISOTP_PCI_TYPE_SF;
             frame.data[1] = (uint8_t)len;
             index = 2;
