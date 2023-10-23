@@ -140,10 +140,9 @@ static void check_frame_series(struct frame_desired *frames, size_t length, stru
         // print_hex(frame.data, can_dlc_to_bytes(frame.dlc));
         // printk("(%x) \n", frame.id);
         /* normalise the lengths here so they are comparable */
-        zassert_equal(can_dlc_to_bytes(frame.dlc),
-                      can_dlc_to_bytes(can_bytes_to_dlc(desired->length)),
-                      "DLC of frame nr %d differ. Desired: %d, Got: %d", i, desired->length,
-                      can_dlc_to_bytes(frame.dlc));
+        zassert_equal(frame.dlc, can_bytes_to_dlc(desired->length),
+                      "DLC of frame nr %d differ. Desired: %d, Got: %d", i,
+                      can_bytes_to_dlc(desired->length), frame.dlc);
 
         ret = check_data(frame.data, desired->data, desired->length);
         zassert_equal(ret, 0, "Data differ");
