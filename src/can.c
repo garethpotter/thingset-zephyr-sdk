@@ -302,7 +302,7 @@ static void thingset_can_report_tx_handler(struct k_work *work)
             frame.flags |= CAN_FRAME_FDF;
 #endif
             frame.dlc = can_bytes_to_dlc(data_len);
-            if (can_send(ts_can->dev, &frame, K_MSEC(10), thingset_can_report_tx_cb, NULL) != 0) {
+            if (can_send(ts_can->dev, &frame, K_MSEC(20), thingset_can_report_tx_cb, NULL) != 0) {
                 LOG_DBG("Error sending CAN frame with ID %x", frame.id);
             }
 #ifdef CONFIG_CAN_FD_MODE
