@@ -96,7 +96,7 @@ ZTEST(thingset_can, test_send_request_to_node)
     zassert_equal(err, 0, "receive timeout");
 }
 
-ZTEST(thingset_isotp_fast, test_request_response)
+ZTEST(thingset_can, test_request_response)
 {
     k_sem_reset(&request_tx_sem);
     k_sem_reset(&response_rx_sem);
