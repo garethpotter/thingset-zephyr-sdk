@@ -454,6 +454,7 @@ void isotp_fast_recv_callback(struct net_buf *buffer, int rem_len, isotp_fast_ca
         }
         else {
             struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
+            k_sem_take(&sbuf->lock, K_FOREVER);
             int tx_len =
                 thingset_process_message(&ts, ts_can->rx_buffer, len, sbuf->data, sbuf->size);
             if (tx_len > 0) {
@@ -476,6 +477,10 @@ void isotp_fast_sent_callback(int result, void *arg)
     if (ts_can->request_response.callback != NULL && result != 0) {
         ts_can->request_response.callback(NULL, 0, result, 0, ts_can->request_response.cb_arg);
         thingset_can_reset_request_response(&ts_can->request_response);
+    }
+    else {
+        struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
+        k_sem_give(&sbuf->lock);
     }
 }
 #else
