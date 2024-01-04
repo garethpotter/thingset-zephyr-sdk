@@ -38,4 +38,11 @@ config ISOTP_FAST_BLOCKING_RECEIVE
     Whether to make blocking receive functionality available
     to ease migration from the old API.
 
+config CONFIG_ISOTP_FAST_CUSTOM_ADDRESSING
+  bool "Custom addressing"
+  default true
+  help
+    Whether to enable the custom callback to determine a reply
+    address for a given inbound message.
+
 endif

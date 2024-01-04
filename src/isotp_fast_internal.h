@@ -21,6 +21,13 @@
 #define ISOTP_FAST_SF_LEN_BYTE 1
 #endif
 
+#define ISOTP_FAST_FIXED_ADDR_PRIO_MASK 0x1F000000
+#define ISOTP_FAST_FIXED_ADDR_PRIO_POS  26
+#define ISOTP_FAST_FIXED_ADDR_TA_MASK   0xFF00
+#define ISOTP_FAST_FIXED_ADDR_TA_POS    8
+#define ISOTP_FAST_FIXED_ADDR_SA_MASK   0xFF
+#define ISOTP_FAST_FIXED_ADDR_SA_POS    0
+
 #define ISOTP_FAST_MAX_LEN 4095
 
 #define ISOTP_4BIT_SF_MAX_CAN_DL 8
@@ -55,9 +62,9 @@ struct isotp_fast_send_ctx
  */
 struct isotp_fast_recv_ctx
 {
-    sys_snode_t node;           /**< linked list node in @ref isotp_recv_ctx_list */
-    struct isotp_fast_ctx *ctx; /**< pointer to bound context */
-    uint32_t rx_can_id;         /**< CAN ID on received frames */
+    sys_snode_t node;                 /**< linked list node in @ref isotp_recv_ctx_list */
+    struct isotp_fast_ctx *ctx;       /**< pointer to bound context */
+    struct isotp_fast_addr rx_can_id; /**< CAN ID on received frames */
     struct k_work work;
     struct k_timer timer;   /**< handles timeouts */
     struct net_buf *buffer; /**< head node of buffer */

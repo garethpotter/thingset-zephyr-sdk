@@ -215,15 +215,46 @@ static void receive_can_tx(const struct device *dev, int error, void *arg)
     }
 }
 
+struct isotp_fast_addr isotp_fast_get_reply_addr(struct isotp_fast_ctx *ctx,
+                                                 const struct isotp_fast_addr addr)
+{
+    // clang-format off
+    switch (ctx->opts->addressing_mode) {
+        case ISOTP_FAST_ADDRESSING_MODE_NORMAL:
+            break;
+        case ISOTP_FAST_ADDRESSING_MODE_FIXED:
+            return (struct isotp_fast_addr){
+                .ext_id = (addr.ext_id & ISOTP_FAST_FIXED_ADDR_PRIO_MASK)
+                          | ((addr.ext_id & ISOTP_FAST_FIXED_ADDR_TA_MASK) >> ISOTP_FAST_FIXED_ADDR_TA_POS)
+                          | ((addr.ext_id & ISOTP_FAST_FIXED_ADDR_SA_MASK) << ISOTP_FAST_FIXED_ADDR_TA_POS)
+            };
+        case ISOTP_FAST_ADDRESSING_MODE_EXTENDED:
+            return (struct isotp_fast_addr){
+                .ext_addr = addr.ext_addr, // is this right?
+            };
+        case ISOTP_FAST_ADDRESSING_MODE_FIXED | ISOTP_FAST_ADDRESSING_MODE_EXTENDED:
+            return (struct isotp_fast_addr){
+                .ext_id = (addr.ext_id & ISOTP_FAST_FIXED_ADDR_PRIO_MASK)
+                          | ((addr.ext_id & ISOTP_FAST_FIXED_ADDR_TA_MASK) >> ISOTP_FAST_FIXED_ADDR_TA_POS)
+                          | ((addr.ext_id & ISOTP_FAST_FIXED_ADDR_SA_MASK) << ISOTP_FAST_FIXED_ADDR_TA_POS),
+                .ext_addr = addr.ext_addr
+            };
+#ifdef CONFIG_ISOTP_FAST_ALLOW_CUSTOM_ADDRESSING
+        case ISOTP_FAST_ADDRESSING_MODE_CUSTOM:
+            return ctx->get_rx_addr_callback(ctx, addr);
+#endif // CONFIG_ISOTP_FAST_ALLOW_CUSTOM_ADDRESSING
+    }
+    // clang-format on
+}
+
 static void receive_send_fc(struct isotp_fast_recv_ctx *rctx, uint8_t fs)
 {
     /* swap bus and address for FC frame */
+    struct isotp_fast_addr reply_addr = isotp_fast_get_reply_addr(rctx->ctx, rctx->rx_can_id);
     struct can_frame frame = {
         .flags =
             CAN_FRAME_IDE | ((rctx->ctx->opts->flags & ISOTP_MSG_FDF) != 0 ? CAN_FRAME_FDF : 0),
-        .id = (rctx->rx_can_id & 0xFF000000) | ((rctx->rx_can_id & 0x0000FF00) >> 8)
-              | ((rctx->rx_can_id & 0x000000FF) << 8) | ((rctx->rx_can_id & 0x000F0000) << 4)
-              | ((rctx->rx_can_id & 0x00F00000) >> 4)
+        .id = reply_addr.ext_id,
     };
     uint8_t *data = frame.data;
     uint8_t payload_len;
@@ -994,7 +1025,7 @@ int isotp_fast_recv(struct isotp_fast_ctx *ctx, struct can_filter sender, uint8_
 #endif /* CONFIG_ISOTP_FAST_BLOCKING_RECEIVE */
 
 int isotp_fast_send(struct isotp_fast_ctx *ctx, const uint8_t *data, size_t len,
-                    const uint8_t target_addr, uint8_t target_bus, void *cb_arg)
+                    const struct isotp_fast_addr target_addr, void *cb_arg)
 {
     const uint32_t rx_can_id = (ctx->rx_can_id & 0xFF000000) | (target_bus << 20)
                                | (isotp_fast_get_target_bus(ctx->rx_can_id) << 16)

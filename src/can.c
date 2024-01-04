@@ -253,8 +253,7 @@ static void thingset_can_report_tx_handler(struct k_work *work)
 
     struct thingset_data_object *obj = NULL;
     while (live_reporting_enable
-           && (obj = thingset_iterate_subsets(&ts, TS_SUBSET_LIVE, obj)) != NULL)
-    {
+           && (obj = thingset_iterate_subsets(&ts, TS_SUBSET_LIVE, obj)) != NULL) {
         k_sem_take(&sbuf->lock, K_FOREVER);
         data_len = thingset_export_item(&ts, sbuf->data, sbuf->size, obj, THINGSET_BIN_VALUES_ONLY);
         if (data_len > CAN_MAX_DLEN) {
@@ -406,9 +405,8 @@ int thingset_can_receive_inst(struct thingset_can *ts_can, uint8_t *rx_buffer, s
 
 #ifdef CONFIG_ISOTP_FAST
 int thingset_can_send_inst(struct thingset_can *ts_can, uint8_t *tx_buf, size_t tx_len,
-                           uint8_t target_addr, uint8_t target_bus,
-                           thingset_can_response_callback_t rsp_callback, void *callback_arg,
-                           k_timeout_t timeout)
+                           uint32_t target_addr, thingset_can_response_callback_t rsp_callback,
+                           void *callback_arg, k_timeout_t timeout)
 {
     if (!device_is_ready(ts_can->dev)) {
         return -ENODEV;
@@ -762,17 +760,17 @@ THINGSET_ADD_ITEM_UINT8(TS_ID_NET, TS_ID_NET_CAN_NODE_ADDR, "pCANNodeAddr",
                         &ts_can_single.node_addr, THINGSET_ANY_RW, TS_SUBSET_NVM);
 
 #ifdef CONFIG_ISOTP_FAST
-int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint8_t target_addr, uint8_t target_bus,
+int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint32_t target_addr,
                       thingset_can_response_callback_t rsp_callback, void *callback_arg,
                       k_timeout_t timeout)
 {
-    return thingset_can_send_inst(&ts_can_single, tx_buf, tx_len, target_addr, target_bus,
-                                  rsp_callback, callback_arg, timeout);
+    return thingset_can_send_inst(&ts_can_single, tx_buf, tx_len, target_addr, rsp_callback,
+                                  callback_arg, timeout);
 }
 #else
-int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint8_t target_addr, uint8_t target_bus)
+int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint8_t target_addr)
 {
-    return thingset_can_send_inst(&ts_can_single, tx_buf, tx_len, target_addr, target_bus);
+    return thingset_can_send_inst(&ts_can_single, tx_buf, tx_len, target_addr);
 }
 #endif /* CONFIG_ISOTP_FAST */
 
