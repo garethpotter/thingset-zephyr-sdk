@@ -62,9 +62,9 @@ struct isotp_fast_send_ctx
  */
 struct isotp_fast_recv_ctx
 {
-    sys_snode_t node;                 /**< linked list node in @ref isotp_recv_ctx_list */
-    struct isotp_fast_ctx *ctx;       /**< pointer to bound context */
-    struct isotp_fast_addr rx_can_id; /**< CAN ID on received frames */
+    sys_snode_t node;                       /**< linked list node in @ref isotp_recv_ctx_list */
+    struct isotp_fast_ctx *ctx;             /**< pointer to bound context */
+    const struct isotp_fast_addr rx_can_id; /**< CAN ID on received frames */
     struct k_work work;
     struct k_timer timer;   /**< handles timeouts */
     struct net_buf *buffer; /**< head node of buffer */

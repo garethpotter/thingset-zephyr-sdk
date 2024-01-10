@@ -121,7 +121,7 @@ struct isotp_fast_ctx
     /** Callback that is invoked when a message is sent */
     isotp_fast_send_callback_t sent_callback;
     /** CAN ID of this node, used in receipt of messages */
-    const struct isotp_fast_addr rx_can_id;
+    struct isotp_fast_addr rx_can_id;
 #ifdef CONFIG_ISOTP_FAST_BLOCKING_RECEIVE
     sys_slist_t wait_recv_list;
 #endif

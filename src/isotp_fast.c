@@ -852,17 +852,17 @@ static void send_timeout_handler(struct k_timer *timer)
     k_work_submit(&sctx->work);
 }
 
-static inline void prepare_filter(struct can_filter *filter, uint32_t rx_can_id,
+static inline void prepare_filter(struct can_filter *filter, const struct isotp_fast_addr rx_can_id,
                                   const struct isotp_fast_opts *opts)
 {
-    filter->id = rx_can_id;
+    filter->id = rx_can_id.ext_id;
     filter->mask = 0x03F0FF00; /* fixed target bus and target address of any priority */
     filter->flags = CAN_FILTER_DATA | CAN_FILTER_IDE
                     | ((opts->flags & ISOTP_MSG_FDF) != 0 ? CAN_FILTER_FDF : 0);
 }
 
 int isotp_fast_bind(struct isotp_fast_ctx *ctx, const struct device *can_dev,
-                    const uint32_t rx_can_id, const struct isotp_fast_opts *opts,
+                    const struct isotp_fast_addr rx_can_id, const struct isotp_fast_opts *opts,
                     isotp_fast_recv_callback_t recv_callback, void *recv_cb_arg,
                     isotp_fast_recv_error_callback_t recv_error_callback,
                     isotp_fast_send_callback_t sent_callback)
