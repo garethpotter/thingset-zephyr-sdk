@@ -22,8 +22,10 @@ struct isotp_fast_addr
         uint32_t std_id : 11;
         uint32_t ext_id : 29;
     };
+#ifdef CONFIG_ISOTP_FAST_EXTENDED_ADDRESSING
     /** ISO-TP extended address */
     uint8_t ext_addr;
+#endif
 };
 
 /**

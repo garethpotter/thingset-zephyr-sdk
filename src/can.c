@@ -253,7 +253,8 @@ static void thingset_can_report_tx_handler(struct k_work *work)
 
     struct thingset_data_object *obj = NULL;
     while (live_reporting_enable
-           && (obj = thingset_iterate_subsets(&ts, TS_SUBSET_LIVE, obj)) != NULL) {
+           && (obj = thingset_iterate_subsets(&ts, TS_SUBSET_LIVE, obj)) != NULL)
+    {
         k_sem_take(&sbuf->lock, K_FOREVER);
         data_len = thingset_export_item(&ts, sbuf->data, sbuf->size, obj, THINGSET_BIN_VALUES_ONLY);
         if (data_len > CAN_MAX_DLEN) {
@@ -405,8 +406,9 @@ int thingset_can_receive_inst(struct thingset_can *ts_can, uint8_t *rx_buffer, s
 
 #ifdef CONFIG_ISOTP_FAST
 int thingset_can_send_inst(struct thingset_can *ts_can, uint8_t *tx_buf, size_t tx_len,
-                           uint32_t target_addr, thingset_can_response_callback_t rsp_callback,
-                           void *callback_arg, k_timeout_t timeout)
+                           struct isotp_fast_addr target_addr,
+                           thingset_can_response_callback_t rsp_callback, void *callback_arg,
+                           k_timeout_t timeout)
 {
     if (!device_is_ready(ts_can->dev)) {
         return -ENODEV;
@@ -698,8 +700,8 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
     }
 
 #ifdef CONFIG_ISOTP_FAST
-    uint32_t rx_can_id = THINGSET_CAN_TYPE_CHANNEL | THINGSET_CAN_PRIO_CHANNEL
-                         | THINGSET_CAN_TARGET_SET(ts_can->node_addr);
+    struct isotp_fast_addr rx_can_id = { THINGSET_CAN_TYPE_CHANNEL | THINGSET_CAN_PRIO_CHANNEL
+                                         | THINGSET_CAN_TARGET_SET(ts_can->node_addr) };
     isotp_fast_bind(&ts_can->ctx, can_dev, rx_can_id, &fc_opts, isotp_fast_recv_callback, ts_can,
                     isotp_fast_recv_error_callback, isotp_fast_sent_callback);
 #endif
@@ -760,7 +762,7 @@ THINGSET_ADD_ITEM_UINT8(TS_ID_NET, TS_ID_NET_CAN_NODE_ADDR, "pCANNodeAddr",
                         &ts_can_single.node_addr, THINGSET_ANY_RW, TS_SUBSET_NVM);
 
 #ifdef CONFIG_ISOTP_FAST
-int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint32_t target_addr,
+int thingset_can_send(uint8_t *tx_buf, size_t tx_len, struct isotp_fast_addr target_addr,
                       thingset_can_response_callback_t rsp_callback, void *callback_arg,
                       k_timeout_t timeout)
 {

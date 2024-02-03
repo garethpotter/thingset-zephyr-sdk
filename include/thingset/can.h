@@ -296,12 +296,11 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
  *
  * @param tx_buf Buffer containing the message.
  * @param tx_len Length of the message.
- * @param target_addr Target node address (8-bit value) to send the message to.
- * @param target_bus Target bus number (4-bit value) to send the message to.
+ * @param target_addr Target node address to send the message to.
  *
  * @returns 0 for success or negative errno in case of error
  */
-int thingset_can_send(uint8_t *tx_buf, size_t tx_len, uint8_t target_addr, uint8_t target_bus,
+int thingset_can_send(uint8_t *tx_buf, size_t tx_len, struct isotp_fast_addr target_addr,
                       thingset_can_response_callback_t rsp_callback, void *callback_arg,
                       k_timeout_t timeout);
 #else
