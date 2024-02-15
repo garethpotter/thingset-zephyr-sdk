@@ -64,25 +64,85 @@ int thingset_storage_load()
     struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
     k_sem_take(&sbuf->lock, K_FOREVER);
 
-    if (version == CONFIG_THINGSET_STORAGE_DATA_VERSION && len <= sbuf->size) {
+    if (version == CONFIG_THINGSET_STORAGE_DATA_VERSION) {
+        if (len <= sbuf->size) {
+            err = eeprom_read(eeprom_dev, EEPROM_HEADER_SIZE, sbuf->data, len);
 
-        err = eeprom_read(eeprom_dev, EEPROM_HEADER_SIZE, sbuf->data, len);
-
-        if (crc32_ieee(sbuf->data, len) == crc) {
-            int status = thingset_import_data(&ts, sbuf->data, len, THINGSET_WRITE_MASK,
-                                              THINGSET_BIN_IDS_VALUES);
-            if (status == 0) {
-                LOG_DBG("EEPROM read and data successfully updated");
+            if (crc32_ieee(sbuf->data, len) == crc) {
+                int status = thingset_import_data(&ts, sbuf->data, len, THINGSET_WRITE_MASK,
+                                                  THINGSET_BIN_IDS_VALUES);
+                if (status == 0) {
+                    LOG_DBG("EEPROM read and data successfully updated");
+                }
+                else {
+                    LOG_ERR("Importing data failed with ThingSet response code 0x%X", -status);
+                    err = -EINVAL;
+                }
             }
             else {
-                LOG_ERR("Importing data failed with ThingSet response code 0x%X", -status);
+                LOG_ERR("EEPROM data CRC invalid, expected 0x%x and data_len %d", crc, len);
                 err = -EINVAL;
             }
         }
+#ifdef CONFIG_THINGSET_STORAGE_EEPROM_PROGRESSIVE_IMPORT_EXPORT
         else {
-            LOG_ERR("EEPROM data CRC invalid, expected 0x%x and data_len %d", crc, len);
+
+            int calculated_crc = 0x0;
+            bool begin = true;
+            uint32_t last_id = 0;
+            size_t processed_size = 0;
+            size_t total_read_size = EEPROM_HEADER_SIZE;
+            do {
+                int size = len > sbuf->size ? sbuf->size : len;
+                LOG_DBG("Reading %d bytes starting at offset %d", size, total_read_size);
+                err = eeprom_read(eeprom_dev, total_read_size, sbuf->data, size);
+                if (err) {
+                    LOG_ERR("Error %d reading EEPROM.", -err);
+                    break;
+                }
+
+                if (begin) {
+                    begin = false;
+                    err = thingset_begin_import_data_progressively(&ts, sbuf->data, size,
+                                                                   THINGSET_BIN_IDS_VALUES);
+                    if (err) {
+                        LOG_ERR("Error %d initializing import of data.", -err);
+                        break;
+                    }
+                    LOG_DBG("Begining import of EEPROM data");
+                }
+                err = thingset_do_import_data_progressively(&ts, THINGSET_WRITE_MASK, size,
+                                                            &last_id, &processed_size);
+                calculated_crc = crc32_ieee_update(calculated_crc, sbuf->data, processed_size);
+                total_read_size += processed_size;
+                len -= processed_size;
+            } while (len > 0 && err > 0);
+            LOG_INF("Finished processing %d bytes; calculated CRC %.8x",
+                    total_read_size - EEPROM_HEADER_SIZE, calculated_crc);
+            if (!err) {
+                thingset_end_import_data_progressively(&ts);
+            }
+
+            if (calculated_crc == crc) {
+                if (!err) {
+                    LOG_INF("EEPROM read and data successfully updated");
+                }
+                else {
+                    LOG_ERR("Importing data failed with ThingSet response code 0x%X", -err);
+                    err = -EINVAL;
+                }
+            }
+            else {
+                LOG_ERR("EEPROM data CRC invalid, expected 0x%x and data_len %d", crc, len);
+                err = -EINVAL;
+            }
+        }
+#else
+        else {
+            LOG_ERR("EEPROM data too large to be loaded by this firmware version.");
             err = -EINVAL;
         }
+#endif /* CONFIG_THINGSET_STORAGE_EEPROM_PROGRESSIVE_IMPORT_EXPORT */
     }
     else if (version == 0xFFFF && len == 0xFFFF && crc == 0xFFFFFFFF) {
         LOG_DBG("EEPROM empty");
@@ -99,7 +159,7 @@ int thingset_storage_load()
 
 int thingset_storage_save()
 {
-    int err;
+    int err = 0;
 
     if (!device_is_ready(eeprom_dev)) {
         LOG_ERR("EEPROM device not ready");
@@ -109,6 +169,51 @@ int thingset_storage_save()
     struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
     k_sem_take(&sbuf->lock, K_FOREVER);
 
+#ifdef CONFIG_THINGSET_STORAGE_EEPROM_PROGRESSIVE_IMPORT_EXPORT
+    LOG_DBG("Initialising with buffer of size %d", sbuf->size);
+
+    int rtn;
+    int i = 0;
+    size_t size;
+    size_t total_size = EEPROM_HEADER_SIZE;
+    uint32_t crc = 0x0;
+    do {
+        rtn = thingset_export_subsets_progressively(&ts, sbuf->data, sbuf->size, TS_SUBSET_NVM,
+                                                    THINGSET_BIN_IDS_VALUES, &i, &size);
+        if (rtn < 0) {
+            LOG_ERR("ThingSet data export error 0x%x", -rtn);
+            err = -EINVAL;
+            break;
+        }
+        crc = crc32_ieee_update(crc, sbuf->data, size);
+        LOG_DBG("Writing %d bytes to EEPROM", size);
+        err = eeprom_write(eeprom_dev, total_size, sbuf->data, size);
+        if (err) {
+            LOG_ERR("EEPROM write error %d", err);
+            break;
+        }
+        total_size += size;
+    } while (rtn > 0 && err == 0);
+    if (!err) {
+        total_size -= EEPROM_HEADER_SIZE;
+        LOG_INF("Wrote a total of %d bytes comprising %d items with checksum %.8x; writing "
+                "header",
+                total_size, i, crc);
+
+        /* now write the header */
+        uint8_t header[EEPROM_HEADER_SIZE];
+        *((uint16_t *)&header[0]) = (uint16_t)CONFIG_THINGSET_STORAGE_DATA_VERSION;
+        *((uint16_t *)&header[2]) = (uint16_t)total_size;
+        *((uint32_t *)&header[4]) = crc;
+        err = eeprom_write(eeprom_dev, 0, header, EEPROM_HEADER_SIZE);
+    }
+    if (err == 0) {
+        LOG_INF("EEPROM data successfully stored");
+    }
+    else {
+        LOG_ERR("EEPROM write error %d", -err);
+    }
+#else
     int len = thingset_export_subsets(&ts, sbuf->data + EEPROM_HEADER_SIZE,
                                       sbuf->size - EEPROM_HEADER_SIZE, TS_SUBSET_NVM,
                                       THINGSET_BIN_IDS_VALUES);
@@ -127,13 +232,11 @@ int thingset_storage_save()
             LOG_DBG("EEPROM data successfully stored");
         }
         else {
-            LOG_ERR("EEPROM write error %d", err);
+            LOG_ERR("Exporting data failed with ThingSet response code 0x%X", -len);
+            err = -EINVAL;
         }
     }
-    else {
-        LOG_ERR("Exporting data failed with ThingSet response code 0x%X", -len);
-        err = -EINVAL;
-    }
+#endif /* CONFIG_THINGSET_STORAGE_EEPROM_PROGRESSIVE_IMPORT_EXPORT */
 
     k_sem_give(&sbuf->lock);
 
