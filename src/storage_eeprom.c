@@ -165,52 +165,47 @@ int thingset_storage_save()
 
 #ifdef CONFIG_THINGSET_STORAGE_EEPROM_PROGRESSIVE_IMPORT_EXPORT
     LOG_DBG("Initialising with buffer of size %d", sbuf->size);
-    err = thingset_begin_export_subsets_progressively(&ts, sbuf->data, sbuf->size,
-                                                      THINGSET_BIN_IDS_VALUES);
-    if (err) {
-        LOG_ERR("Error %d initializing export of data.", -err);
+
+    int rtn;
+    int i = 0;
+    size_t size;
+    size_t total_size = EEPROM_HEADER_SIZE;
+    uint32_t crc = 0x0;
+    do {
+        rtn = thingset_export_subsets_progressively(&ts, sbuf->data, sbuf->size, TS_SUBSET_NVM,
+                                                    THINGSET_BIN_IDS_VALUES, &i, &size);
+        if (rtn < 0) {
+            LOG_ERR("ThingSet data export error 0x%x", -rtn);
+            err = -EINVAL;
+            break;
+        }
+        crc = crc32_ieee_update(crc, sbuf->data, size);
+        LOG_DBG("Writing %d bytes to EEPROM", size);
+        err = eeprom_write(eeprom_dev, total_size, sbuf->data, size);
+        if (err) {
+            LOG_ERR("EEPROM write error %d", err);
+            break;
+        }
+        total_size += size;
+    } while (rtn > 0 && err == 0);
+    if (!err) {
+        total_size -= EEPROM_HEADER_SIZE;
+        LOG_INF("Wrote a total of %d bytes comprising %d items with checksum %.8x; writing "
+                "header",
+                total_size, i, crc);
+
+        /* now write the header */
+        uint8_t header[EEPROM_HEADER_SIZE];
+        *((uint16_t *)&header[0]) = (uint16_t)CONFIG_THINGSET_STORAGE_DATA_VERSION;
+        *((uint16_t *)&header[2]) = (uint16_t)total_size;
+        *((uint32_t *)&header[4]) = crc;
+        err = eeprom_write(eeprom_dev, 0, header, EEPROM_HEADER_SIZE);
+    }
+    if (err == 0) {
+        LOG_INF("EEPROM data successfully stored");
     }
     else {
-        int rtn;
-        int i = 0;
-        size_t size;
-        size_t total_size = EEPROM_HEADER_SIZE;
-        uint32_t crc = 0x0;
-        do {
-            rtn = thingset_do_export_subsets_progressively(&ts, TS_SUBSET_NVM, &i, &size);
-            if (rtn < 0) {
-                LOG_ERR("ThingSet data export error 0x%x", -rtn);
-                err = -EINVAL;
-                break;
-            }
-            crc = crc32_ieee_update(crc, sbuf->data, size);
-            LOG_DBG("Writing %d bytes to EEPROM", size);
-            err = eeprom_write(eeprom_dev, total_size, sbuf->data, size);
-            if (err) {
-                LOG_ERR("EEPROM write error %d", err);
-                break;
-            }
-            total_size += size;
-        } while (rtn > 0 && err == 0);
-        if (!err) {
-            total_size -= EEPROM_HEADER_SIZE;
-            LOG_INF("Wrote a total of %d bytes comprising %d items with checksum %.8x; writing "
-                    "header",
-                    total_size, i, crc);
-
-            /* now write the header */
-            uint8_t header[EEPROM_HEADER_SIZE];
-            *((uint16_t *)&header[0]) = (uint16_t)CONFIG_THINGSET_STORAGE_DATA_VERSION;
-            *((uint16_t *)&header[2]) = (uint16_t)total_size;
-            *((uint32_t *)&header[4]) = crc;
-            err = eeprom_write(eeprom_dev, 0, header, EEPROM_HEADER_SIZE);
-        }
-        if (err == 0) {
-            LOG_INF("EEPROM data successfully stored");
-        }
-        else {
-            LOG_ERR("EEPROM write error %d", -err);
-        }
+        LOG_ERR("EEPROM write error %d", -err);
     }
 #else
     int len = thingset_export_subsets(&ts, sbuf->data + EEPROM_HEADER_SIZE,
