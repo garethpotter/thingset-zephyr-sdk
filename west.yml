@@ -7,8 +7,6 @@ manifest:
       url-base: https://github.com/zephyrproject-rtos
     - name: thingset
       url-base: https://github.com/ThingSet
-    - name: garethpotter
-      url-base: https://github.com/garethpotter
     - name: libresolar
       url-base: https://github.com/LibreSolar
   projects:
@@ -28,7 +26,7 @@ manifest:
           - tinycrypt
           - picolibc
     - name: thingset-node-c
-      remote: garethpotter
-      revision: 520de9cbf3158fe2f4468e74ae0e91fb84a314ba
+      remote: thingset
+      revision: 0c71987b6664fc50a20457918bb4039340c74375
       path: modules/thingset-node-c
       import: true
