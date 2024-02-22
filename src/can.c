@@ -280,7 +280,7 @@ int thingset_can_send_report_inst(struct thingset_can *ts_can, const char *path,
             size_t frame_len = can_dlc_to_bytes(frame.dlc);
             if (frame_len > chunk_len) {
                 for (unsigned int i = 0; i < frame_len - chunk_len; i++) {
-                    frame.data[chunk_len + i] = 0xFF;
+                    frame.data[chunk_len + i] = 0x00;
                 }
             }
         }
