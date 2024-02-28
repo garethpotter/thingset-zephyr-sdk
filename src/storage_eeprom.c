@@ -89,6 +89,7 @@ int thingset_storage_load()
 
             int calculated_crc = 0x0;
             int i = 0;
+            uint32_t last_id;
             size_t processed_size = 0;
             size_t total_read_size = EEPROM_HEADER_SIZE;
             do {
@@ -109,7 +110,7 @@ int thingset_storage_load()
                     LOG_DBG("Begining import of EEPROM data");
                 }
                 err = thingset_do_import_data_progressively(&ts, THINGSET_WRITE_MASK, size,
-                                                            &processed_size);
+                                                            &last_id, &processed_size);
                 calculated_crc = crc32_ieee_update(calculated_crc, sbuf->data, processed_size);
                 total_read_size += processed_size;
                 len -= processed_size;
