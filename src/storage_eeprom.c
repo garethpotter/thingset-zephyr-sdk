@@ -89,7 +89,7 @@ int thingset_storage_load()
 
             int calculated_crc = 0x0;
             int i = 0;
-            uint32_t last_id;
+            uint32_t last_id = 0;
             size_t processed_size = 0;
             size_t total_read_size = EEPROM_HEADER_SIZE;
             do {
