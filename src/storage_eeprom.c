@@ -94,6 +94,7 @@ int thingset_storage_load()
             size_t total_read_size = EEPROM_HEADER_SIZE;
             do {
                 int size = len > sbuf->size ? sbuf->size : len;
+                LOG_DBG("Reading %d bytes starting at offset %d", size, total_read_size);
                 err = eeprom_read(eeprom_dev, total_read_size, sbuf->data, size);
                 if (err) {
                     LOG_ERR("Error %d reading EEPROM.", -err);
@@ -115,9 +116,12 @@ int thingset_storage_load()
                 calculated_crc = crc32_ieee_update(calculated_crc, sbuf->data, processed_size);
                 total_read_size += processed_size;
                 len -= processed_size;
-            } while (len > 0 || err > 0);
+            } while (len > 0 && err > 0);
             LOG_INF("Finished processing %d bytes; calculated CRC %.8x",
                     total_read_size - EEPROM_HEADER_SIZE, calculated_crc);
+            if (!err) {
+                thingset_end_import_data_progressively(&ts);
+            }
 
             if (calculated_crc == crc) {
                 if (!err) {
