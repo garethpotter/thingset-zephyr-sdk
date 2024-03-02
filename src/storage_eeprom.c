@@ -88,7 +88,7 @@ int thingset_storage_load()
         else {
 
             int calculated_crc = 0x0;
-            int i = 0;
+            bool begin = true;
             uint32_t last_id = 0;
             size_t processed_size = 0;
             size_t total_read_size = EEPROM_HEADER_SIZE;
@@ -98,9 +98,10 @@ int thingset_storage_load()
                 if (err) {
                     LOG_ERR("Error %d reading EEPROM.", -err);
                     break;
-                    ;
                 }
-                if (i++ == 0) {
+
+                if (begin) {
+                    begin = false;
                     err = thingset_begin_import_data_progressively(&ts, sbuf->data, size,
                                                                    THINGSET_BIN_IDS_VALUES);
                     if (err) {
