@@ -74,13 +74,24 @@ int thingset_storage_load()
         size_t processed_size = 0;
         size_t total_read_size = sizeof(header);
         size_t len = header.data_len;
+        size_t read_offset;
+        size_t max_read_size = 128;
         do {
             int size = len > sbuf->size ? sbuf->size : len;
-            LOG_DBG("Reading %d bytes starting at offset %d", size, total_read_size);
-            err = eeprom_read(eeprom_dev, total_read_size, sbuf->data, size);
-            if (err) {
-                LOG_ERR("Error %d reading EEPROM.", -err);
-                break;
+
+            read_offset = total_read_size;
+            int index = DIV_ROUND_UP(size, max_read_size);
+
+            for (int i = 0; i < index; i++) {
+                size_t read_size = size > max_read_size ? max_read_size : size;
+                LOG_DBG("Reading %d bytes starting at offset %d", read_size, read_offset);
+                err =
+                    eeprom_read(eeprom_dev, read_offset, &sbuf->data[i * max_read_size], read_size);
+                if (err) {
+                    LOG_ERR("Error %d reading EEPROM.", -err);
+                    break;
+                }
+                read_offset += read_size;
             }
 
             err =
