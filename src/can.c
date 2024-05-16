@@ -625,7 +625,7 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
     struct can_filter addr_claim_filter = {
         .id = THINGSET_CAN_TYPE_NETWORK | THINGSET_CAN_TARGET_SET(THINGSET_CAN_ADDR_BROADCAST),
         .mask = THINGSET_CAN_TYPE_MASK | THINGSET_CAN_TARGET_MASK,
-        .flags = CAN_FILTER_IDE,
+        .flags = CAN_FILTER_IDE | CAN_FILTER_DATA,
     };
 
 #ifdef CONFIG_THINGSET_CAN_ROUTING_BUSES
