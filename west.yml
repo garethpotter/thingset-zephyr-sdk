@@ -12,7 +12,7 @@ manifest:
   projects:
     - name: zephyr
       remote: zephyrproject
-      revision: v3.5-branch
+      revision: v3.6-branch
       import:
         name-allowlist:
           - cmsis
@@ -27,6 +27,6 @@ manifest:
           - picolibc
     - name: thingset-node-c
       remote: thingset
-      revision: f320a8b65f41d2c438fd56085c5d998283802320
+      revision: d3338c7623869637bc6ce0b95358e44db2a3443f
       path: modules/thingset-node-c
       import: true

@@ -30,8 +30,7 @@ extern uint8_t eui64[8];
 static const struct can_filter sf_report_filter = {
     .id = THINGSET_CAN_TYPE_SF_REPORT,
     .mask = THINGSET_CAN_TYPE_MASK,
-    .flags =
-        CAN_FILTER_DATA | CAN_FILTER_IDE | (IS_ENABLED(CONFIG_CAN_FD_MODE) ? CAN_FILTER_FDF : 0),
+    .flags = CAN_FILTER_IDE,
 };
 #endif /* CONFIG_THINGSET_CAN_ITEM_RX */
 
@@ -39,16 +38,9 @@ static const struct can_filter sf_report_filter = {
 static const struct can_filter mf_report_filter = {
     .id = THINGSET_CAN_TYPE_MF_REPORT,
     .mask = THINGSET_CAN_TYPE_MASK,
-    .flags =
-        CAN_FILTER_DATA | CAN_FILTER_IDE | (IS_ENABLED(CONFIG_CAN_FD_MODE) ? CAN_FILTER_FDF : 0),
+    .flags = CAN_FILTER_IDE,
 };
 #endif /* CONFIG_THINGSET_CAN_REPORT_RX */
-
-static const struct can_filter addr_claim_filter = {
-    .id = THINGSET_CAN_TYPE_NETWORK | THINGSET_CAN_TARGET_SET(THINGSET_CAN_ADDR_BROADCAST),
-    .mask = THINGSET_CAN_TYPE_MASK | THINGSET_CAN_TARGET_MASK,
-    .flags = CAN_FILTER_DATA | CAN_FILTER_IDE,
-};
 
 static const struct isotp_fast_opts fc_opts = {
     .bs = 8, /* block size */
@@ -134,12 +126,18 @@ static void thingset_can_addr_claim_tx_handler(struct k_work *work)
     struct thingset_can *ts_can = CONTAINER_OF(dwork, struct thingset_can, addr_claim_work);
 
     struct can_frame tx_frame = {
+        .id = THINGSET_CAN_TYPE_NETWORK | THINGSET_CAN_PRIO_NETWORK_MGMT
+#ifdef CONFIG_THINGSET_CAN_ROUTING_BUSES
+              | THINGSET_CAN_TARGET_BUS_SET(ts_can->route)
+              | THINGSET_CAN_SOURCE_BUS_SET(ts_can->route)
+#else /* CONFIG_THINGSET_CAN_ROUTING_BRIDGES */
+              | THINGSET_CAN_BRIDGE_SET(ts_can->route)
+#endif
+              | THINGSET_CAN_TARGET_SET(THINGSET_CAN_ADDR_BROADCAST)
+              | THINGSET_CAN_SOURCE_SET(ts_can->node_addr),
         .flags = CAN_FRAME_IDE,
+        .dlc = sizeof(eui64),
     };
-    tx_frame.id = THINGSET_CAN_TYPE_NETWORK | THINGSET_CAN_PRIO_NETWORK_MGMT
-                  | THINGSET_CAN_TARGET_SET(THINGSET_CAN_ADDR_BROADCAST)
-                  | THINGSET_CAN_SOURCE_SET(ts_can->node_addr);
-    tx_frame.dlc = sizeof(eui64);
     memcpy(tx_frame.data, eui64, sizeof(eui64));
 
     int err = can_send(ts_can->dev, &tx_frame, K_MSEC(100), thingset_can_addr_claim_tx_cb, ts_can);
@@ -170,8 +168,14 @@ static void thingset_can_addr_claim_rx_cb(const struct device *dev, struct can_f
             THINGSET_CAN_SOURCE_GET(frame->id), data[0], data[1], data[2], data[3], data[4],
             data[5], data[6], data[7]);
 
-    if (ts_can->node_addr == THINGSET_CAN_SOURCE_GET(frame->id)) {
+    uint8_t source_addr = THINGSET_CAN_SOURCE_GET(frame->id);
+
+    if (ts_can->node_addr == source_addr) {
         k_event_post(&ts_can->events, EVENT_ADDRESS_ALREADY_USED);
+    }
+
+    if (ts_can->addr_claim_callback != NULL) {
+        ts_can->addr_claim_callback(data, source_addr);
     }
 
     /* Optimization: store in internal database to exclude from potentially available addresses */
@@ -332,6 +336,7 @@ out:
     return ret;
 }
 
+#ifdef CONFIG_THINGSET_SUBSET_LIVE_METRICS
 static void thingset_can_live_reporting_handler(struct k_work *work)
 {
     struct k_work_delayable *dwork = k_work_delayable_from_work(work);
@@ -349,6 +354,7 @@ static void thingset_can_live_reporting_handler(struct k_work *work)
 
     thingset_sdk_reschedule_work(dwork, K_TIMEOUT_ABS_MS(ts_can->next_live_report_time));
 }
+#endif /* CONFIG_THINGSET_SUBSET_LIVE_METRICS */
 
 #ifdef CONFIG_THINGSET_CAN_CONTROL_REPORTING
 static void thingset_can_item_tx_cb(const struct device *dev, int error, void *user_data)
@@ -574,7 +580,9 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
     k_sem_init(&ts_can->request_response.sem, 1, 1);
     k_sem_init(&ts_can->report_tx_sem, 0, 1);
 
+#ifdef CONFIG_THINGSET_SUBSET_LIVE_METRICS
     k_work_init_delayable(&ts_can->live_reporting_work, thingset_can_live_reporting_handler);
+#endif
 #ifdef CONFIG_THINGSET_CAN_CONTROL_REPORTING
     k_work_init_delayable(&ts_can->control_reporting_work, thingset_can_control_reporting_handler);
 #endif
@@ -591,10 +599,41 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
     k_event_init(&ts_can->events);
 
 #ifdef CONFIG_CAN_FD_MODE
-    can_set_mode(ts_can->dev, CAN_MODE_FD);
+    can_mode_t supported_modes;
+    err = can_get_capabilities(can_dev, &supported_modes);
+    if (err == 0 && (supported_modes & CAN_MODE_FD) != 0) {
+        err = can_set_mode(ts_can->dev, CAN_MODE_FD);
+        if (err == 0) {
+            LOG_DBG("Enabled CAN-FD mode");
+        }
+        else {
+            LOG_ERR("Failed to enable CAN-FD mode");
+            return -ENODEV;
+        }
+    }
+    else {
+        LOG_ERR("CAN device does not support CAN-FD; recompile with CAN_FD_MODE set to false.");
+        /* there is no point continuing, as we will still assume a 64-byte payload everywhere */
+        return -ENODEV;
+    }
 #endif
 
     can_start(ts_can->dev);
+
+    struct can_filter addr_claim_filter = {
+        .id = THINGSET_CAN_TYPE_NETWORK | THINGSET_CAN_TARGET_SET(THINGSET_CAN_ADDR_BROADCAST),
+        .mask = THINGSET_CAN_TYPE_MASK | THINGSET_CAN_TARGET_MASK,
+        .flags = CAN_FILTER_IDE,
+    };
+
+#ifdef CONFIG_THINGSET_CAN_ROUTING_BUSES
+    addr_claim_filter.id |=
+        THINGSET_CAN_TARGET_BUS_SET(bus_number) | THINGSET_CAN_SOURCE_BUS_SET(bus_number);
+    addr_claim_filter.mask |= THINGSET_CAN_TARGET_BUS_MASK | THINGSET_CAN_SOURCE_BUS_MASK;
+#elif defined(CONFIG_THINGSET_CAN_ROUTING_BRIDGES)
+    addr_claim_filter.id |= THINGSET_CAN_BRIDGE_SET(bus_number);
+    addr_claim_filter.mask |= THINGSET_CAN_BRIDGE_MASK;
+#endif
 
     filter_id =
         can_add_rx_filter(ts_can->dev, thingset_can_addr_claim_rx_cb, ts_can, &addr_claim_filter);
@@ -665,7 +704,7 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
         .id = THINGSET_CAN_TYPE_NETWORK | THINGSET_CAN_SOURCE_SET(THINGSET_CAN_ADDR_ANONYMOUS)
               | THINGSET_CAN_TARGET_SET(ts_can->node_addr),
         .mask = THINGSET_CAN_TYPE_MASK | THINGSET_CAN_SOURCE_MASK | THINGSET_CAN_TARGET_MASK,
-        .flags = CAN_FILTER_DATA | CAN_FILTER_IDE,
+        .flags = CAN_FILTER_IDE,
     };
     filter_id = can_add_rx_filter(ts_can->dev, thingset_can_addr_discovery_rx_cb, ts_can,
                                   &addr_discovery_filter);
@@ -683,12 +722,20 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
                     ts_can, thingset_can_reqresp_recv_error_callback,
                     thingset_can_reqresp_sent_callback);
 
+#ifdef CONFIG_THINGSET_SUBSET_LIVE_METRICS
     thingset_sdk_reschedule_work(&ts_can->live_reporting_work, K_NO_WAIT);
+#endif
 #ifdef CONFIG_THINGSET_CAN_CONTROL_REPORTING
     thingset_sdk_reschedule_work(&ts_can->control_reporting_work, K_NO_WAIT);
 #endif
 
     return 0;
+}
+
+void thingset_can_set_addr_claim_rx_callback_inst(struct thingset_can *ts_can,
+                                                  thingset_can_addr_claim_rx_callback_t cb)
+{
+    ts_can->addr_claim_callback = cb;
 }
 
 #ifdef CONFIG_THINGSET_CAN_REPORT_RX
