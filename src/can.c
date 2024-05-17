@@ -865,7 +865,7 @@ static void thingset_can_thread()
     int err;
 
     LOG_DBG("Initialising ThingSet CAN");
-    err = thingset_can_init_inst(&ts_can_single, can_dev, CONFIG_THINGSET_CAN_DEFAULT_ROUTE);
+    err = thingset_can_init_inst(&ts_can_single, can_dev, CONFIG_THINGSET_CAN_DEFAULT_ROUTE, -1);
     if (err != 0) {
         LOG_ERR("Failed to init ThingSet CAN: %d", err);
         return;
