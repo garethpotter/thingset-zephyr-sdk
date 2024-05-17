@@ -651,7 +651,7 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
                       | THINGSET_CAN_RAND_SET(rand) | THINGSET_CAN_TARGET_SET(ts_can->node_addr)
                       | THINGSET_CAN_SOURCE_SET(THINGSET_CAN_ADDR_ANONYMOUS);
         tx_frame.dlc = 0;
-        err = can_send(ts_can->dev, &tx_frame, K_MSEC(10), NULL, NULL);
+        err = can_send(ts_can->dev, &tx_frame, K_MSEC(10), thingset_can_addr_claim_tx_cb, ts_can);
         if (err != 0) {
             k_sleep(K_MSEC(100));
             continue;
