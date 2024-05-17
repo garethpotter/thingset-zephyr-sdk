@@ -27,8 +27,6 @@ extern uint8_t eui64[8];
 #define EVENT_ADDRESS_ALREADY_USED      0x03
 #define EVENT_ADDRESS_DISCOVER_MSG_SENT 0x04
 
-#define MAX_ADDRESS_DISCOVERY_RETRIES 10
-
 #ifdef CONFIG_THINGSET_CAN_ITEM_RX
 static const struct can_filter sf_report_filter = {
     .id = THINGSET_CAN_TYPE_SF_REPORT,
@@ -574,7 +572,7 @@ static void thingset_can_reqresp_sent_callback(int result, void *arg)
 }
 
 int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can_dev,
-                           uint8_t bus_number)
+                           uint8_t bus_number, int timeout_ms)
 {
     struct can_frame tx_frame = {
         .flags = CAN_FRAME_IDE,
@@ -657,7 +655,8 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
         return filter_id;
     }
 
-    size_t addr_discover_retry_count = 0;
+    uint32_t start = k_uptime_get();
+    uint32_t elapsed_ms = 0;
     while (1) {
         k_event_clear(&ts_can->events, EVENT_ADDRESS_ALREADY_USED);
 
@@ -670,8 +669,8 @@ int thingset_can_init_inst(struct thingset_can *ts_can, const struct device *can
         err =
             can_send(ts_can->dev, &tx_frame, K_MSEC(10), thingset_can_addr_discover_tx_cb, ts_can);
         if (err != 0) {
-            addr_discover_retry_count++;
-            if (addr_discover_retry_count > MAX_ADDRESS_DISCOVERY_RETRIES) {
+            elapsed_ms += (k_uptime_get() - start);
+            if (timeout_ms > 0 && elapsed_ms > timeout_ms) {
                 return -ETIMEDOUT;
             }
             k_sleep(K_MSEC(100));
