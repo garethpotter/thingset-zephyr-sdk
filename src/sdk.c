@@ -58,7 +58,7 @@ bool summary_reporting_enable = IS_ENABLED(CONFIG_THINGSET_REPORTING_SUMMARY_ENA
 uint32_t summary_reporting_period = CONFIG_THINGSET_REPORTING_SUMMARY_PERIOD_PRESET;
 #endif
 
-struct thingset_context ts;
+struct thingset_global_context ts;
 
 THINGSET_ADD_ITEM_STRING(TS_ID_ROOT, THINGSET_ID_NODEID, "pNodeID", node_id, sizeof(node_id),
                          THINGSET_ANY_R | THINGSET_MFR_W, TS_SUBSET_NVM);

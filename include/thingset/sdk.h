@@ -116,7 +116,7 @@ extern uint32_t live_reporting_period;
 extern bool summary_reporting_enable;
 extern uint32_t summary_reporting_period;
 
-extern struct thingset_context ts;
+extern struct thingset_global_context ts;
 
 struct shared_buffer
 {

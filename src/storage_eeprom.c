@@ -70,6 +70,7 @@ static int thingset_eeprom_load(off_t offset)
         size_t total_read_size = sizeof(header);
         size_t len = header.data_len;
         size_t chunk_offset = 0;
+        struct thingset_context req_ctx;
         do {
             int size = len > sbuf->size ? sbuf->size : len;
             int num_chunks = DIV_ROUND_UP(size, CONFIG_THINGSET_STORAGE_EEPROM_CHUNK_SIZE);
@@ -91,9 +92,9 @@ static int thingset_eeprom_load(off_t offset)
                 remaining_bytes -= read_size;
             }
 
-            err =
-                thingset_import_data_progressively(&ts, sbuf->data, size, THINGSET_BIN_IDS_VALUES,
-                                                   THINGSET_WRITE_MASK, &last_id, &processed_size);
+            err = thingset_import_data_progressively(&ts, sbuf->data, size, THINGSET_BIN_IDS_VALUES,
+                                                     THINGSET_WRITE_MASK, &req_ctx, &last_id,
+                                                     &processed_size);
             calculated_crc = crc32_ieee_update(calculated_crc, sbuf->data, processed_size);
             LOG_DBG("Updated CRC over %d bytes: 0x%.8x", processed_size, calculated_crc);
             total_read_size += processed_size;
@@ -176,9 +177,10 @@ static int thingset_eeprom_save(off_t offset, size_t useable_size)
     uint32_t crc = 0x0;
     uint8_t read_back[CONFIG_THINGSET_STORAGE_EEPROM_CHUNK_SIZE];
     size_t chunk_offset = 0;
+    struct thingset_context req_ctx;
     do {
         rtn = thingset_export_subsets_progressively(&ts, sbuf->data, sbuf->size, TS_SUBSET_NVM,
-                                                    THINGSET_BIN_IDS_VALUES, &i, &size);
+                                                    THINGSET_BIN_IDS_VALUES, &req_ctx, &i, &size);
         if (rtn < 0) {
             LOG_ERR("ThingSet data export error 0x%x", -rtn);
             err = -EINVAL;
