@@ -166,7 +166,7 @@ static void thingset_can_addr_discovery_rx_cb(const struct device *dev, struct c
 {
     struct thingset_can *ts_can = user_data;
 
-    LOG_INF("Received address discovery frame with ID %X (rand %.2X)", frame->id,
+    LOG_DBG("Received address discovery frame with ID %X (rand %.2X)", frame->id,
             THINGSET_CAN_RAND_GET(frame->id));
 
     thingset_sdk_reschedule_work(&ts_can->addr_claim_work, K_NO_WAIT);
@@ -178,7 +178,7 @@ static void thingset_can_addr_claim_rx_cb(const struct device *dev, struct can_f
     struct thingset_can *ts_can = user_data;
     uint8_t *data = frame->data;
 
-    LOG_INF("Received address claim from node 0x%.2X with EUI-64 "
+    LOG_DBG("Received address claim from node 0x%.2X with EUI-64 "
             "%02x-%02x-%02x-%02x-%02x-%02x-%02x-%02x",
             THINGSET_CAN_SOURCE_GET(frame->id), data[0], data[1], data[2], data[3], data[4],
             data[5], data[6], data[7]);
