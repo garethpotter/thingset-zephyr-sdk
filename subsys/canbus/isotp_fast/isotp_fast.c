@@ -620,7 +620,7 @@ static void send_process_fc(struct isotp_fast_send_ctx *sctx, struct can_frame *
     uint8_t *data = frame->data;
 
     if ((*data & ISOTP_PCI_TYPE_MASK) != ISOTP_PCI_TYPE_FC) {
-        LOG_ERR("Got unexpected PDU expected FC");
+        LOG_ERR("Got unexpected PDU expected FC from %x", frame->id);
         send_report_error(sctx, ISOTP_N_UNEXP_PDU);
         return;
     }
@@ -648,7 +648,7 @@ static void send_process_fc(struct isotp_fast_send_ctx *sctx, struct can_frame *
             break;
 
         case ISOTP_PCI_FS_OVFLW:
-            LOG_ERR("Got overflow FC frame");
+            LOG_ERR("Got overflow FC frame from %x", frame->id);
             send_report_error(sctx, ISOTP_N_BUFFER_OVERFLW);
             break;
 
@@ -664,7 +664,7 @@ static void send_can_rx(struct isotp_fast_send_ctx *sctx, struct can_frame *fram
         send_process_fc(sctx, frame);
     }
     else {
-        LOG_ERR("Got unexpected PDU");
+        LOG_ERR("Got unexpected PDU from %x", frame->id);
         send_report_error(sctx, ISOTP_N_UNEXP_PDU);
     }
 
@@ -837,8 +837,8 @@ static void send_state_machine(struct isotp_fast_send_ctx *sctx)
             break;
 
         case ISOTP_TX_ERR:
-            LOG_DBG("SM error");
             sctx->ctx->sent_callback(sctx->error, sctx->cb_arg);
+            LOG_ERR("Aborting TX to %x due to error %d", sctx->tx_addr.ext_id, sctx->error);
             sctx->state = ISOTP_TX_STATE_RESET;
             free_send_ctx(sctx);
             break;
