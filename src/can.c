@@ -532,23 +532,34 @@ static void thingset_can_reqresp_recv_callback(struct net_buf *buffer, int rem_l
             thingset_can_reset_request_response(&ts_can->request_response);
         }
         else {
+            uint8_t target_addr = THINGSET_CAN_SOURCE_GET(addr.ext_id);
+            uint8_t route = IS_ENABLED(CONFIG_THINGSET_CAN_ROUTING_BUSES)
+                                ? THINGSET_CAN_SOURCE_BUS_GET(addr.ext_id)
+                                : THINGSET_CAN_BRIDGE_GET(addr.ext_id);
+            int err;
             struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
-            k_sem_take(&sbuf->lock, K_FOREVER);
-            int tx_len =
-                thingset_process_message(&ts, ts_can->rx_buffer, len, sbuf->data, sbuf->size);
-            if (tx_len > 0) {
-                uint8_t target_addr = THINGSET_CAN_SOURCE_GET(addr.ext_id);
-                uint8_t route = IS_ENABLED(CONFIG_THINGSET_CAN_ROUTING_BUSES)
-                                    ? THINGSET_CAN_SOURCE_BUS_GET(addr.ext_id)
-                                    : THINGSET_CAN_BRIDGE_GET(addr.ext_id);
-                int err = thingset_can_send_inst(ts_can, sbuf->data, tx_len, target_addr, route,
+            if (k_sem_take(&sbuf->lock, THINGSET_CONTEXT_LOCK_TIMEOUT_MS) == 0) {
+                int tx_len =
+                    thingset_process_message(&ts, ts_can->rx_buffer, len, sbuf->data, sbuf->size);
+                if (tx_len > 0) {
+                    err = thingset_can_send_inst(ts_can, sbuf->data, tx_len, target_addr, route,
                                                  NULL, NULL, K_NO_WAIT);
-                if (err != 0) {
+                    if (err != 0) {
+                        k_sem_give(&sbuf->lock);
+                    }
+                    /* in the non-error case, this is unlocked in
+                       thingset_can_reqresp_sent_callback */
+                }
+                else {
                     k_sem_give(&sbuf->lock);
                 }
             }
             else {
-                k_sem_give(&sbuf->lock);
+                /* failed to take lock; respond with simple error */
+                /* can't think of anything better for a timeout for now */
+                uint8_t error_resp[1] = { THINGSET_ERR_INTERNAL_SERVER_ERR };
+                err = thingset_can_send_inst(ts_can, error_resp, sizeof(error_resp), target_addr,
+                                             route, NULL, NULL, K_NO_WAIT);
             }
         }
     }
