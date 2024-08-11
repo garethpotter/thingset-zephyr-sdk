@@ -557,6 +557,7 @@ static void thingset_can_reqresp_recv_callback(struct net_buf *buffer, int rem_l
             else {
                 /* failed to take lock; respond with simple error */
                 /* can't think of anything better for a timeout for now */
+                LOG_ERR("Failed to acquire ThingSet shared buffer lock");
                 uint8_t error_resp[1] = { THINGSET_ERR_INTERNAL_SERVER_ERR };
                 err = thingset_can_send_inst(ts_can, error_resp, sizeof(error_resp), target_addr,
                                              route, NULL, NULL, K_NO_WAIT);
