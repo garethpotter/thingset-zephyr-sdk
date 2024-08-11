@@ -538,7 +538,7 @@ static void thingset_can_reqresp_recv_callback(struct net_buf *buffer, int rem_l
                                 : THINGSET_CAN_BRIDGE_GET(addr.ext_id);
             int err;
             struct shared_buffer *sbuf = thingset_sdk_shared_buffer();
-            if (k_sem_take(&sbuf->lock, THINGSET_CONTEXT_LOCK_TIMEOUT_MS) == 0) {
+            if (k_sem_take(&sbuf->lock, K_MSEC(THINGSET_CONTEXT_LOCK_TIMEOUT_MS)) == 0) {
                 int tx_len =
                     thingset_process_message(&ts, ts_can->rx_buffer, len, sbuf->data, sbuf->size);
                 if (tx_len > 0) {
