@@ -45,12 +45,6 @@ static const struct can_filter mf_report_filter = {
 };
 #endif /* CONFIG_THINGSET_CAN_REPORT_RX */
 
-static const struct can_filter addr_claim_filter = {
-    .id = THINGSET_CAN_TYPE_NETWORK | THINGSET_CAN_TARGET_SET(THINGSET_CAN_ADDR_BROADCAST),
-    .mask = THINGSET_CAN_TYPE_MASK | THINGSET_CAN_TARGET_MASK,
-    .flags = CAN_FILTER_DATA | CAN_FILTER_IDE,
-};
-
 static const struct isotp_fast_opts fc_opts = {
     .bs = 8, /* block size */
     .stmin = CONFIG_THINGSET_CAN_FRAME_SEPARATION_TIME,
