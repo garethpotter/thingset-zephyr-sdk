@@ -28,7 +28,7 @@ manifest:
           - segger
           - tinycrypt
     - name: thingset-node-c
-      remote: thingset
-      revision: d3338c7623869637bc6ce0b95358e44db2a3443f
+      remote: garethpotter
+      revision: 98eb279d92dd900669dde2c64c11859d78eae9b2
       path: modules/thingset-node-c
       import: true
